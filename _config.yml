@@ -14,7 +14,7 @@ sass:
 
 permalink: /posts/:title/
 texture:
-  title: Adam Denisov
+  title: ChengHua
   tagline: Developer. Designer
   date_format: "%b %-d, %Y"
   style: black
@@ -23,9 +23,9 @@ texture:
 
   # generate social links in footer
   social_links:
-    twitter: thelehhman
-    github:  thelehhman
-    linkedIn: in/thelehhman
+    twitter: NULL
+    github:  NULL
+    linkedIn: in/NULL
     rss: rss
  
 

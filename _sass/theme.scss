@@ -18,8 +18,8 @@ $lightGray: #eee;
 
 body {
 	font-family: 'Nunito Sans', sans-serif;
-	@include fluidType(16px, 19px);
-	line-height: 1.55em;
+	@include fluidType(12px, 16px);
+	line-height: 1.75em;
 	margin: 0;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
