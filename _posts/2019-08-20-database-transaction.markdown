@@ -177,14 +177,46 @@ redo日志的原理跟undo类似，这里不再介绍。
   - A和B同时给C转账100元。最后C只增加了100元。  
 - 脏读：读取到未提交的数据  
   - A转账100元给账号B，在转账的同时计算A和B的余额之和。  
-![脏读](https://chenghua-root.github.io/images/transaction-dirty-read.png)  
+
+  |          | A = 1000 | B = 1000 | |  
+  | -----    | ----     |  ---     | -----   |
+  | T1:读取A | 1000     |          |  |
+  | T1:读取B |          |1000      |  |  
+  | T1:A-100 | 900      |          |  |
+  | T1:计算A+B   | 900      | 1000     | <strong>A+B = 1900, 读到A未提交的数据<strong> |
+  | T1:B+200 |          | 1100     |  |
+  | T1:提交  | A=900    | B=1100   |  |
+{: .tablelines}  
 
 - 不可重复读：同一个事务两次读取同一行记录，返回的值不一致  
-![不可重复读](https://chenghua-root.github.io/images/transaction-not-repeat-read.png)  
+
+  |        | A = 1000 | |  
+  | -----  | ----   |  --- |
+  | T1: 读取A | 1000 | |  
+  |T2: A+200并提交| A = 1200 | |  
+  | T1：再次读取A| 1200 | <strong>两次读取A的值不一致，1000/1200<strong> |  
+{: .tablelines}  
+
+- 不可重复读2：  
+
+  |        | A = 1000 | B = 1000 | |  
+  | -----  | ----   |  --- |  -----   |
+  | T1:读取A| 1000 |  |  |
+  | T2: A给B转账200| A=800 |  B=1200 ||  
+  | T1:读取B| | 1200 |  |
+  | T1: 计算A+B| |  | <strong>sum=2200<strong> |
+{: .tablelines}  
+
 
 - 幻读:  
-![幻读](https://chenghua-root.github.io/images/transaction-phantom-read.png)  
-  
+
+  |          |          |
+  | -----    | ----     |
+  | T1: 统计余额在[1000, 2000)的账户个数 |  select count(\*) from table where value >= 1000 and value < 2000; count(\*) = 10|
+  | T2: 插入一条余额为1500的新记录 |          |
+  |  T1: 继续重新统计余额在[1000, 2000)的账户个数|     <strong>count(\*) = 11<strong> |
+{: .tablelines}  
+
 ### 隔离级别：  
 根据如上几种不一致的表现定义了如下几种隔离级别：  
   
