@@ -1,6 +1,6 @@
 ---  
 layout: post  
-title:  "虚拟内存机制"  
+title:  "Linux虚拟内存机制"  
 date:   2019-08-25 19:48:00 +0530   
 ---  
   
@@ -11,10 +11,23 @@ date:   2019-08-25 19:48:00 +0530
   border: 1px solid black;  
   }  
 </style>  
-  
-  
+
+## 背景  
+美团云图片服务在20180529遇到个别节点延迟增加的情况，查看现象为CPU系统使用率偏高。
+perf采样如下：
+![图片服务异常火焰图](https://chenghua-root.github.io/images/memory-image-perf.png)  
+基于火焰图中的compact_zone()，结合网上资料分析是由于没有连续的大块内存来满足内存大页分配导致。
+关闭透明内存大页后现象消失，系统恢复正常。
+- echo never > /sys/kernel/mm/redhat_transparent_hugepage/enabled
+- echo never > /sys/kernel/mm/redhat_transparent_hugepage/defrag
+- echo no > /sys/kernel/mm/redhat_transparent_hugepage/khugepaged/defrag
+
+事后作者做了关于内存大页的分享。
+理解为什么需要内存大页和内存大页的实现原理，需要提前了解虚拟内存机制，在准备分享过程中收集了如下有关资料供自己和他人参考。
+文章图片均为网图。
+
 ## 概述：  
-进程管理、虚拟内存和虚拟文件系统是单机系统最重要的几个底层原理。本文主要讲解虚拟内存机制。  
+进程管理、虚拟内存和文件系统是单机系统最重要的几个底层原理。本文主要讲解虚拟内存机制。  
   
 虚拟内存由底层硬件和操作系统两者软硬件结合来实现，是物理内存、内存地址、地址翻译、磁盘文件、系统内核和进程空间的交互。主要提供3个能力：  
   
@@ -28,6 +41,7 @@ date:   2019-08-25 19:48:00 +0530
 3. 物理内存分配  
 4. 虚拟内存分配  
 5. page cache  
+6. 内存大页
   
   | 名词 | 含义|  
   | -----  | ----  |  
@@ -38,9 +52,10 @@ date:   2019-08-25 19:48:00 +0530
 ## 虚拟内存描述  
   
 ### 虚拟地址空间  
-每个进程使用的都是虚拟地址，每个进程看到一样的虚拟地址空间。  
-32位系统，它的虚拟地址空间是0~2^32；  
-64位系统虚拟地址空间为0~2^48(64位系统：48位地址总线，64位数据总线)。  
+虚拟地址：
+- 每个进程使用的都是虚拟地址，每个进程看到一样的虚拟地址空间。  
+- 32位系统的虚拟地址空间是0~2^32；  
+- 64位系统的虚拟地址空间为0~2^48(64位系统：48位地址总线，64位数据总线)。  
   
 Linux内核把虚拟地址空间划分为两部分：用户地址空间和内核地址空间。  
   
@@ -52,39 +67,38 @@ Linux内核把虚拟地址空间划分为两部分：用户地址空间和内核
 - 用户空间128T：0x0000,0000,0000,0000 - 0x0000,7FFFF,FFFF,FFFF（高16位与第48位都为0）  
 - 内核空间128T：0xFFFF,8000,0000,0000 - 0xFFFF,FFFFF,FFFF,FFFF（高16位与第48位都为1）  
   
-pp  
+32位与64位系统具体地址分布如下：
+![32位与64位系统地址分布](https://chenghua-root.github.io/images/memory-virtual-space02.png)  
   
 32位系统详细内存空间划分如下：  
-pp  
-  
-每个进程包含一个task_struct结构，task_struct包含一个mm_struct。mm_struct管理进程内的所有内存。mm_struct包含多个vm_area_struct。每个vm_area_struct管理一段地址空间，分别有代码段、数据段、BSS段、堆、一个或多个MMap段、栈。  
+![32位地址分布](https://chenghua-root.github.io/images/memory-32-addr.png)  
+
+地址空间与数据结构关系：
+![地址空间与数据结构关系](https://chenghua-root.github.io/images/memory-mm-struct.png)  
+- 每个进程包含一个task_struct结构，task_struct包含一个mm_struct。mm_struct管理进程内的所有内存。mm_struct包含多个vm_area_struct。每个vm_area_struct管理一段地址空间，分别有代码段、数据段、BSS段、堆、一个或多个MMap段、栈。  
   
 ### 页面和页表  
-系统把虚拟地址空间划分为虚拟页（后面简称页或页面），以页为单位进行划分，页面大小为4KB或2MB。若页面大小为4KB，32位系统包含2^32/4K = 2^20 = 1M个页面；64位系统包含2^48/4K = 2^36个页面。  
-系统通过页表对页面进行管理，页表是存放在主存中的，每个进程包含一个单独页表。  
-每个页面对应一个页表项(PTE)，32位系统的每个页表项占用4个字节。那么页表需要2^20个\*4字节= 4MB的空间。  
-  
-64位系统页表项假设也为4个字节，那么页表需要2^36 * 4字节 = 2^38 = 256GB的空间。如果保存所有的页表项，空间开销太大。  
-由于页表项加载是按需加载的，没有分配的虚拟页不需要建立页表项。所以我们可以采用多级页表的形式。即没有分配的页面不需要建立页表项。  
-32位系统采用两级页表结构：32 = 10(页目录) + 10(页表) + 12(页内偏移量OFFSET)  
-Core i7（64位系统）采用4级页表结构：48 = 9(1级页目录PGD) + 9(2级页目录PUD) + 9(3级页目录PMD) + 9(4级页表PT) + 12(页内偏移量OFFSET)  
-  
-每个进程都有一个页面目录（多级页表），存放在内核地址空间。  
+- 系统把虚拟地址空间划分为虚拟页（后面简称页或页面），以页为单位进行划分，页面大小为4KB或2MB。若页面大小为4KB，32位系统包含2^32/4K = 2^20 = 1M个页面；64位系统包含2^48/4K = 2^36个页面。  
+- 系统通过页表对页面进行管理，页表是存放在主存中的，每个进程包含一个单独页表。  
+- 每个页面对应一个页表项(PTE)，32位系统的每个页表项占用4个字节。那么页表需要2^20个\*4字节= 4MB的空间。  
+- 64位系统页表项假设也为4个字节，那么页表需要2^36 * 4字节 = 2^38 = 256GB的空间。如果保存所有的页表项，空间开销太大。  
+- 由于页表项加载是按需加载的，没有分配的虚拟页不需要建立页表项。所以我们可以采用多级页表的形式。即没有分配的页面不需要建立页表项。  
+- 32位系统采用两级页表结构：32 = 10(页目录) + 10(页表) + 12(页内偏移量OFFSET)  
+- 64位系统(inter Core i7)采用4级页表结构：48 = 9(1级页目录PGD) + 9(2级页目录PUD) + 9(3级页目录PMD) + 9(4级页表PT) + 12(页内偏移量OFFSET)  
   
 ## 物理内存描述  
- Linux将物理内存按固定大小的页面(参考虚拟页，如4K)划分内存，在内核初始化时，会建立一个全局的struct page结构的数组mem_map[]。如系统有76G物理内存，则物理内存页面数为76\*1024^3/4K =  19\*1024\*1024个页面，mem_map[]的长度为19922944，即数组中的每个元素和物理内存页面一一对应，整个数组就代表着系统中全部物理页面。  
-  
-在服务器中，存在NUMA架构和UMA架构，Linux将NUMA中内存访问速度一致的部分称为一个节点（Node），用sturct pglist_data(typedef pg_data_t)表示。每个节点通过pg_data_t->node_next连接起来。  
-  
-UMA指所有CPU访问的内存都是一致的，无论是访问速度还是范围。NUMA指每个CPU除了包含一致的内存外，还有不一致的访问内存。如某些或全部CPU还有自己独立的访问内存。  
-  
-每个节点又进一步划分为许多块，称为区域（Zones）。区域表示内存中的一块范围，区域用struct zone_struct(typedef zone_t)数据结构表示。  
-  
+### 物理内存的划分
+- Linux将物理内存按固定大小的页面(参考虚拟页，如4K)划分内存，在内核初始化时，会建立一个全局的struct page结构的数组mem_map[]。如系统有76G物理内存，则物理内存页面数为76\*1024^3/4K =  19\*1024\*1024个页面，mem_map[]的长度为19922944，即数组中的每个元素和物理内存页面一一对应，整个数组就代表着系统中全部物理页面。  
+- 在服务器中，存在NUMA架构和UMA架构，Linux将NUMA中内存访问速度一致的部分称为一个节点（Node），用sturct pglist_data(typedef pg_data_t)表示。每个节点通过pg_data_t->node_next连接起来。  
+- UMA指所有CPU访问的内存都是一致的，无论是访问速度还是范围。NUMA指每个CPU除了包含一致的内存外，还有不一致的访问内存。如某些或全部CPU还有自己独立的访问内存。  
+- 每个节点又进一步划分为许多块，称为区域（Zones）。区域表示内存中的一块范围，区域用struct zone_struct(typedef zone_t)数据结构表示。  
+
 每个区域（Zone）中有多个页面（Pages）组成。节点、区域、页面三种关系如下图：  
-pp  
+![节点区域页面](https://chenghua-root.github.io/images/memory-node-zone-page)
+
 ### Zone分类：  
-pp  
-- 节点包含两个node，分别为node0和node1。  
+![](https://chenghua-root.github.io/images/memory-zone.png)
+- 上图中包含两个node，分别为node0和node1，每个node包含不同的zone。  
   
 ZONE_DMA：是低内存的一块区域，由标准工业架构（Industry Standard Architecture）设备使用，适合DMA内存。x86架构中，该部分区域大小限制为16MB(24位DMA地址总线)。  
   
@@ -129,24 +143,24 @@ zone的迁移/整理类型是指对这个zone下面的页面的操作限制：
 5. 将页面描述项中给出的页面基地址与线性地址中的offset位相加得到物理地址。。  
   
 32位系统线性地址到物理地址的转换：  
-pp  
+![](https://chenghua-root.github.io/images/memory-mapping-32bit.png)
   
 64位系统线性地址到物理地址的转换：  
-pp  
+![](https://chenghua-root.github.io/images/memory-mapping-64bit.png)
   
 CR3寄存器的值是从哪里设置的？  
 - 内核在创建进程时，会分配页面目录，页面目录的地址就保存在task_struct结构中，task_struct结构中有个mm_struct结构类型的指针mm，mm_struct结构中有个字段pgd就是用来保存该进程的CR3寄存器的值。  
   
 问题：  
 1. 基地址和物理地址的关系，基地址如何映射物理地址，PAGE_OFFSET  
-2. 每个用户进行地址转换的时候，查询的那个页目录表和页表，是存在内核空间还是用户空间？这些表是所有用户进程共享，还是独立的？  
+2. 每个用户进行地址转换的时候，查询的页目录表和页表，是存在内核空间还是用户空间？这些表是所有用户进程共享，还是独立的？(**每个进程都有一个页面目录（多级页表），存放在内核地址空间。**)  
 3. 页面表项是在什么时候创建的  
   
 ### TLB  
 TLB（Translation lookaside buffer，页表寄存器缓冲）  
 由上一节可知，页表是被存储在内存中的。我们知道CPU通过总线访问内存，肯定慢于直接访问寄存器的。而做一次地址转换需要访问四次内存(64位机器)，开销很大。  
 为了进一步优化性能，现代CPU架构引入了TLB，用来缓存一部分经常访问的页表内容。  
-pp  
+![](https://chenghua-root.github.io/images/memory-tlb.png)
   
 问题：  
 1. 64位系统的地址转换速度是否比32位系统慢?  
@@ -165,43 +179,46 @@ pp
 Linux内核管理的每个内存空闲块都是2的幂次方个物理地址连续的页面，幂次方的大小为order。把1个空闲页面的放在一起，2个空闲页面（物理地址连续）放在一起，4个空闲页面（物理地址连续）放在一起……2^MAX_ORDER-1个页面（物理地址连续）放在一起。  
   
 空闲页面组织，如下图所示：  
-pp  
+![](https://chenghua-root.github.io/images/memory-free-page-manage.png)
 - 在版本2.6.32中，MAX_ORDER定义为11，内核管理的最大连续空闲物理内存大小为2^10个页面，即为4MB。  
   
 **区域（Zone）与空闲页面：**  
 在区域的数据结构中，有个数组free_area[MAX_ORDER]来保存每个空闲内存块链表：  
-pp  
+```
+struct zone {
+    struct free_area free_area[MAX_ORDER];
+    unsigned long padding[16];
+};
+```
 这样free_area[MAX_ORDER]数组中的第1个元素，指向内存块大小为2^0即1个页面的空闲页面链表；数组中的第2个元素指向内存块大小为2^1即2个页面的空闲页面链表。  
   
 数据类型free_area结构体定义如下：  
-pp  
+```
+struct free_area {
+    struct list_head free_list[MIGRATE_TYPES];
+    unsigned long nr_free;
+};
+
+```
 - free_list：空闲页面块的双链表；  
 - nr_free：该区域中的空闲页面块数量；  
 - MIGRATE_TYPES：常量：不同类型的内存区域个数。参考上面截图cat /proc/pagetypeinfo  
   
 每个空闲页面链表上各个元素（大小相同的连续物理页面），通过struct page中的双链表成员变量来连接，如下图所示：  
-pp  
-  
-```  
-struct page {  
-  union {  
-		struct list_head lru;  
-  };  
-};  
-```  
+![](https://chenghua-root.github.io/images/memory-free-page-link.png)
   
 上面提到Linux内核描述物理内存有三个节点：节点、区域和页面。空闲页面的管理只是在区域（Zone）这一层，节点（Node）下的每个区域都管理着自己的空闲物理页面。空闲页面管理与节点、区域之间的关系如下图：  
-pp  
+![](https://chenghua-root.github.io/images/memory-free-page-manage-in-zone.png)
   
 ### 伙伴算法  
 伙伴系统（Buddy System）在理论上是非常简单的内存分配算法。它的用途主要是尽可能减少外部碎片（external fragmentation），同时允许快速分配和回收物理页面。为了减少外部碎片，连续的空闲页面，根据空闲块大小，组织成不同的链表。前面介绍的空闲物理页面管理就是伙伴系统的一部分。  
   
-当一个需求为申请4个连续页面时，检查order=3-1下面是否有空闲块。若该链表上有空闲块，则分配给用户，否则向下一个级别（order）的链表中查找。  
+当一个需求为申请4个连续页面时，检查order=2下面是否有空闲块。若该链表上有空闲块，则分配给用户，否则向下一个级别（order）的链表中查找。  
   
 回收：标记页面为空闲块，若相邻物理页面为空闲，则尝试合并生成更大的连续物理页面块；若有合并，则要更新free_area[]中链表元素。更新相关统计信息。  
   
 Buddy系统信息查看：  
-pp  
+![](https://chenghua-root.github.io/images/memory-buddy-info)
   
 ### 内存分类  
 内存可以根据使用类型来进行分类：  
