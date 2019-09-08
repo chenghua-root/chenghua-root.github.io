@@ -1,10 +1,8 @@
 ---  
 layout: post  
 title:  "Linux虚拟内存机制"  
-date:   2019-08-25 19:48:00 +0530   
+date:   2019-09-08 16:48:00 +0530   
 ---  
-  
-## 背景  
   
 <style>  
 .tablelines table, .tablelines td, .tablelines th {  
@@ -23,8 +21,9 @@ perf采样如下：
 - echo no > /sys/kernel/mm/redhat_transparent_hugepage/khugepaged/defrag  
   
 事后作者做了关于内存大页的分享。  
-理解为什么需要内存大页和内存大页的实现原理，需要提前了解虚拟内存机制，在准备分享过程中收集了如下有关资料供自己和他人参考。  
-文章图片均为网图。  
+理解为什么需要内存大页和内存大页的实现原理，需要了解虚拟内存机制，在准备分享过程中收集了如下资料供自己参考。  
+后面图片均为网图。  
+文末附有透明内存大页的测试。
   
 ## 概述：  
 进程管理、虚拟内存和文件系统是单机系统最重要的几个底层原理。本文主要讲解虚拟内存机制。  
@@ -40,8 +39,8 @@ perf采样如下：
 2. 地址映射  
 3. 物理内存分配  
 4. 虚拟内存分配  
-5. page cache  
-6. 内存大页  
+5. 内存大页  
+6. page cache  
   
   | 名词 | 含义|  
   | -----  | ----  |  
@@ -64,8 +63,8 @@ Linux内核把虚拟地址空间划分为两部分：用户地址空间和内核
 - 内核空间1G：0xC000,0000 - 0xFFFF,FFFF  
   
 64位系统：  
-- 用户空间128T：0x0000,0000,0000,0000 - 0x0000,7FFFF,FFFF,FFFF（高16位与第48位都为0）  
-- 内核空间128T：0xFFFF,8000,0000,0000 - 0xFFFF,FFFFF,FFFF,FFFF（高16位与第48位都为1）  
+- 用户空间128T：0x0000,0000,0000,0000 - 0x0000,7FFFF,FFFF,FFFF(高16位与第48位都为0)  
+- 内核空间128T：0xFFFF,8000,0000,0000 - 0xFFFF,FFFFF,FFFF,FFFF(高16位与第48位都为1)  
   
 32位与64位系统具体地址分布如下：  
 ![32位与64位系统地址分布](https://chenghua-root.github.io/images/memory-virtual-space02.png)  
@@ -335,7 +334,7 @@ Cache管理的优劣通过两个指标衡量：一是Cache命中率；二是有�
   
 如何定位读取文件的offset在哪个cache page中：  
 - 通过基数树来实现。即为cache与物理文件的映射。  
-![](https://chenghua-root.github.io/images/memory-page-cache-trie.png)  
+![](https://chenghua-root.github.io/images/memory-page-cache-trie.jpg)  
   - 上图为快速定位8位(bit)长度的文件长度。  
   
 ## swap分区、内存回收、kswapd  
@@ -401,3 +400,63 @@ swap分区的实际使用是跟内存回收行为紧密结合的。内存回收�
 2. 为什么进程是资源分配单位，线程是调度单位  
 - 一个进程下的所有线程共享同一个地址空间  
 - 在内核空间中为每个用户线程分配了一个内核栈，栈底部有个thread_info描述整个线程  
+
+## 透明内存大页测试
+**测试目的：**
+- 测试透明内存大页分配和缺页中断次数
+
+**测试方法：**
+1. 先获取分配1个字节时的page-faults次数=105 // mmap()的length参数必须大于0  
+![](https://chenghua-root.github.io/images/memory-thp-test-one-byte.png)  
+2. 关闭内存大页，测试申请16MB  
+  缺页次数4201:  
+![](https://chenghua-root.github.io/images/memory-thp-test-close.png)  
+  缺页次数增加4096=4201-105，缺页内存大小：(4201 - 105) * 4 / 1024 = 16MB，符合预期  
+3. 开启内存大页，测试申请16MB  
+  测试之前透明内存大页使用量：108544 KB
+![](https://chenghua-root.github.io/images/memory-thp-test-used-before.png)  
+  测试之前透明内存大页使用量：122880 KB，较测试前增加(122880 - 108544) / 1024 = 14MB  
+![](https://chenghua-root.github.io/images/memory-thp-test-used-after.png)  
+  缺页次数624：  
+![](https://chenghua-root.github.io/images/memory-thp-test-open.png)  
+分析：  
+ - 缺页次数增加624 - 105 = 519  
+ - 透明内存大页增加14MB，缺页次数7  
+ - 有2MB内存没有通过透明内存大页申请，缺页次数为2MB / 4KB = 512  
+ - 透明内存大页缺页次数(7) + 2MB普通缺页测试(512) = 519符合预期  
+
+**测试代码:**  
+```  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+
+//#define MALLOC_SIZE 1
+#define MALLOC_SIZE (16 * 1024 *1024)
+int main() {
+  void *buf = NULL;
+  int ret = 0;
+  int size = MALLOC_SIZE;
+
+  buf = mmap(NULL, size, PROT_READ | PROT_WRITE,
+    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (buf == (void *)-1) {
+    fprintf(stderr, "mmap fail!\n");
+    ret = -1;
+    goto exit;
+  }
+
+  memset(buf, 'f', size);
+  sleep(3);
+
+  ret = munmap((void*)buf, size);
+  if (ret != 0) {
+    fprintf(stderr, "munmmap fail!\n");
+    goto exit;
+  }
+
+exit:
+  return ret;
+}
+```  
