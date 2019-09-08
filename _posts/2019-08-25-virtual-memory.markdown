@@ -11,21 +11,21 @@ date:   2019-08-25 19:48:00 +0530
   border: 1px solid black;  
   }  
 </style>  
-
+  
 ## 背景  
-美团云图片服务在20180529遇到个别节点延迟增加的情况，查看现象为CPU系统使用率偏高。
-perf采样如下：
+美团云图片服务(与OpenStack::Swift混合部署)在20180529遇到个别节点延迟增加的情况，查看现象为CPU系统使用率偏高。  
+perf采样如下：  
 ![图片服务异常火焰图](https://chenghua-root.github.io/images/memory-image-perf.png)  
-基于火焰图中的compact_zone()，结合网上资料分析是由于没有连续的大块内存来满足内存大页分配导致。
-关闭透明内存大页后现象消失，系统恢复正常。
-- echo never > /sys/kernel/mm/redhat_transparent_hugepage/enabled
-- echo never > /sys/kernel/mm/redhat_transparent_hugepage/defrag
-- echo no > /sys/kernel/mm/redhat_transparent_hugepage/khugepaged/defrag
-
-事后作者做了关于内存大页的分享。
-理解为什么需要内存大页和内存大页的实现原理，需要提前了解虚拟内存机制，在准备分享过程中收集了如下有关资料供自己和他人参考。
-文章图片均为网图。
-
+基于火焰图中的compact_zone()，结合网上资料分析是由于没有连续的大块内存来满足内存大页分配导致。  
+关闭透明内存大页后现象消失，系统恢复正常。  
+- echo never > /sys/kernel/mm/redhat_transparent_hugepage/enabled  
+- echo never > /sys/kernel/mm/redhat_transparent_hugepage/defrag  
+- echo no > /sys/kernel/mm/redhat_transparent_hugepage/khugepaged/defrag  
+  
+事后作者做了关于内存大页的分享。  
+理解为什么需要内存大页和内存大页的实现原理，需要提前了解虚拟内存机制，在准备分享过程中收集了如下有关资料供自己和他人参考。  
+文章图片均为网图。  
+  
 ## 概述：  
 进程管理、虚拟内存和文件系统是单机系统最重要的几个底层原理。本文主要讲解虚拟内存机制。  
   
@@ -41,7 +41,7 @@ perf采样如下：
 3. 物理内存分配  
 4. 虚拟内存分配  
 5. page cache  
-6. 内存大页
+6. 内存大页  
   
   | 名词 | 含义|  
   | -----  | ----  |  
@@ -52,8 +52,8 @@ perf采样如下：
 ## 虚拟内存描述  
   
 ### 虚拟地址空间  
-虚拟地址：
-- 每个进程使用的都是虚拟地址，每个进程看到一样的虚拟地址空间。  
+虚拟地址：  
+- 每个进程使用的都是虚拟地址，所有进程看到一样的虚拟地址空间。  
 - 32位系统的虚拟地址空间是0~2^32；  
 - 64位系统的虚拟地址空间为0~2^48(64位系统：48位地址总线，64位数据总线)。  
   
@@ -67,13 +67,13 @@ Linux内核把虚拟地址空间划分为两部分：用户地址空间和内核
 - 用户空间128T：0x0000,0000,0000,0000 - 0x0000,7FFFF,FFFF,FFFF（高16位与第48位都为0）  
 - 内核空间128T：0xFFFF,8000,0000,0000 - 0xFFFF,FFFFF,FFFF,FFFF（高16位与第48位都为1）  
   
-32位与64位系统具体地址分布如下：
+32位与64位系统具体地址分布如下：  
 ![32位与64位系统地址分布](https://chenghua-root.github.io/images/memory-virtual-space02.png)  
   
 32位系统详细内存空间划分如下：  
 ![32位地址分布](https://chenghua-root.github.io/images/memory-32-addr.png)  
-
-地址空间与数据结构关系：
+  
+地址空间与数据结构关系：  
 ![地址空间与数据结构关系](https://chenghua-root.github.io/images/memory-mm-struct.png)  
 - 每个进程包含一个task_struct结构，task_struct包含一个mm_struct。mm_struct管理进程内的所有内存。mm_struct包含多个vm_area_struct。每个vm_area_struct管理一段地址空间，分别有代码段、数据段、BSS段、堆、一个或多个MMap段、栈。  
   
@@ -87,17 +87,17 @@ Linux内核把虚拟地址空间划分为两部分：用户地址空间和内核
 - 64位系统(inter Core i7)采用4级页表结构：48 = 9(1级页目录PGD) + 9(2级页目录PUD) + 9(3级页目录PMD) + 9(4级页表PT) + 12(页内偏移量OFFSET)  
   
 ## 物理内存描述  
-### 物理内存的划分
+### 物理内存的划分  
 - Linux将物理内存按固定大小的页面(参考虚拟页，如4K)划分内存，在内核初始化时，会建立一个全局的struct page结构的数组mem_map[]。如系统有76G物理内存，则物理内存页面数为76\*1024^3/4K =  19\*1024\*1024个页面，mem_map[]的长度为19922944，即数组中的每个元素和物理内存页面一一对应，整个数组就代表着系统中全部物理页面。  
 - 在服务器中，存在NUMA架构和UMA架构，Linux将NUMA中内存访问速度一致的部分称为一个节点（Node），用sturct pglist_data(typedef pg_data_t)表示。每个节点通过pg_data_t->node_next连接起来。  
 - UMA指所有CPU访问的内存都是一致的，无论是访问速度还是范围。NUMA指每个CPU除了包含一致的内存外，还有不一致的访问内存。如某些或全部CPU还有自己独立的访问内存。  
 - 每个节点又进一步划分为许多块，称为区域（Zones）。区域表示内存中的一块范围，区域用struct zone_struct(typedef zone_t)数据结构表示。  
-
+  
 每个区域（Zone）中有多个页面（Pages）组成。节点、区域、页面三种关系如下图：  
-![节点区域页面](https://chenghua-root.github.io/images/memory-node-zone-page)
-
+![节点区域页面](https://chenghua-root.github.io/images/memory-node-zone-page)  
+  
 ### Zone分类：  
-![](https://chenghua-root.github.io/images/memory-zone.png)
+![](https://chenghua-root.github.io/images/memory-zone.png)  
 - 上图中包含两个node，分别为node0和node1，每个node包含不同的zone。  
   
 ZONE_DMA：是低内存的一块区域，由标准工业架构（Industry Standard Architecture）设备使用，适合DMA内存。x86架构中，该部分区域大小限制为16MB(24位DMA地址总线)。  
@@ -115,7 +115,7 @@ ZONE_HIGHMEM：是系统中剩下的可用内存，但因为32位内核地址空
   - ZONE_HIGHMEM  896MB ~ 结束  
   
 64位系统中，内存三个区域为DMA、DMA32和NORMAL：问题：为什么64位系统中没有ZONE_HIGHMEM  
-  - ZONE_DMA    0 ~ 16MB  
+  - ZONE_DMA  0 ~ 16MB  
   - ZONE_DMA32  16MB ~ 4GB  
   - ZONE_NORMAL   4GB ~ 结束  
   
@@ -143,10 +143,10 @@ zone的迁移/整理类型是指对这个zone下面的页面的操作限制：
 5. 将页面描述项中给出的页面基地址与线性地址中的offset位相加得到物理地址。。  
   
 32位系统线性地址到物理地址的转换：  
-![](https://chenghua-root.github.io/images/memory-mapping-32bit.png)
+![](https://chenghua-root.github.io/images/memory-mapping-32bit.png)  
   
 64位系统线性地址到物理地址的转换：  
-![](https://chenghua-root.github.io/images/memory-mapping-64bit.png)
+![](https://chenghua-root.github.io/images/memory-mapping-64bit.png)  
   
 CR3寄存器的值是从哪里设置的？  
 - 内核在创建进程时，会分配页面目录，页面目录的地址就保存在task_struct结构中，task_struct结构中有个mm_struct结构类型的指针mm，mm_struct结构中有个字段pgd就是用来保存该进程的CR3寄存器的值。  
@@ -160,7 +160,7 @@ CR3寄存器的值是从哪里设置的？
 TLB（Translation lookaside buffer，页表寄存器缓冲）  
 由上一节可知，页表是被存储在内存中的。我们知道CPU通过总线访问内存，肯定慢于直接访问寄存器的。而做一次地址转换需要访问四次内存(64位机器)，开销很大。  
 为了进一步优化性能，现代CPU架构引入了TLB，用来缓存一部分经常访问的页表内容。  
-![](https://chenghua-root.github.io/images/memory-tlb.png)
+![](https://chenghua-root.github.io/images/memory-tlb.png)  
   
 问题：  
 1. 64位系统的地址转换速度是否比32位系统慢?  
@@ -179,36 +179,36 @@ TLB（Translation lookaside buffer，页表寄存器缓冲）
 Linux内核管理的每个内存空闲块都是2的幂次方个物理地址连续的页面，幂次方的大小为order。把1个空闲页面的放在一起，2个空闲页面（物理地址连续）放在一起，4个空闲页面（物理地址连续）放在一起……2^MAX_ORDER-1个页面（物理地址连续）放在一起。  
   
 空闲页面组织，如下图所示：  
-![](https://chenghua-root.github.io/images/memory-free-page-manage.png)
+![](https://chenghua-root.github.io/images/memory-free-page-manage.png)  
 - 在版本2.6.32中，MAX_ORDER定义为11，内核管理的最大连续空闲物理内存大小为2^10个页面，即为4MB。  
   
 **区域（Zone）与空闲页面：**  
 在区域的数据结构中，有个数组free_area[MAX_ORDER]来保存每个空闲内存块链表：  
-```
-struct zone {
-    struct free_area free_area[MAX_ORDER];
-    unsigned long padding[16];
-};
-```
+```  
+struct zone {  
+  struct free_area free_area[MAX_ORDER];  
+  unsigned long padding[16];  
+};  
+```  
 这样free_area[MAX_ORDER]数组中的第1个元素，指向内存块大小为2^0即1个页面的空闲页面链表；数组中的第2个元素指向内存块大小为2^1即2个页面的空闲页面链表。  
   
 数据类型free_area结构体定义如下：  
-```
-struct free_area {
-    struct list_head free_list[MIGRATE_TYPES];
-    unsigned long nr_free;
-};
-
-```
+```  
+struct free_area {  
+  struct list_head free_list[MIGRATE_TYPES];  
+  unsigned long nr_free;  
+};  
+  
+```  
 - free_list：空闲页面块的双链表；  
 - nr_free：该区域中的空闲页面块数量；  
 - MIGRATE_TYPES：常量：不同类型的内存区域个数。参考上面截图cat /proc/pagetypeinfo  
   
 每个空闲页面链表上各个元素（大小相同的连续物理页面），通过struct page中的双链表成员变量来连接，如下图所示：  
-![](https://chenghua-root.github.io/images/memory-free-page-link.png)
+![](https://chenghua-root.github.io/images/memory-free-page-link.png)  
   
 上面提到Linux内核描述物理内存有三个节点：节点、区域和页面。空闲页面的管理只是在区域（Zone）这一层，节点（Node）下的每个区域都管理着自己的空闲物理页面。空闲页面管理与节点、区域之间的关系如下图：  
-![](https://chenghua-root.github.io/images/memory-free-page-manage-in-zone.png)
+![](https://chenghua-root.github.io/images/memory-free-page-manage-in-zone.png)  
   
 ### 伙伴算法  
 伙伴系统（Buddy System）在理论上是非常简单的内存分配算法。它的用途主要是尽可能减少外部碎片（external fragmentation），同时允许快速分配和回收物理页面。为了减少外部碎片，连续的空闲页面，根据空闲块大小，组织成不同的链表。前面介绍的空闲物理页面管理就是伙伴系统的一部分。  
@@ -218,33 +218,51 @@ struct free_area {
 回收：标记页面为空闲块，若相邻物理页面为空闲，则尝试合并生成更大的连续物理页面块；若有合并，则要更新free_area[]中链表元素。更新相关统计信息。  
   
 Buddy系统信息查看：  
-![](https://chenghua-root.github.io/images/memory-buddy-info)
+![](https://chenghua-root.github.io/images/memory-buddy-info)  
   
 ### 内存分类  
 内存可以根据使用类型来进行分类：  
  - 匿名内存：Anonymous。普通malloc申请的内存。  
  - 基于文件的内存：File-Back。有对应文件的内存，如代码段，swap内存，page cache内存。  
   
-##  Cache管理机制  
-在Linux操作系统中，当应用程序需要读取文件中的数据时，操作系统先分配一些内存，将数据从存储设备读入到内存中，然后再将数据分发给应用程序；当需要往文件中写数据时，操作系统先分配内存接收用户数据，然后再讲数据从内存写到磁盘。文件cache管理指的就是对这些由操作系统分配，并用来存储文件数据的内存的管理。  
+## 虚拟内存分配  
+应用程序分配内存使用malloc()/free()或者mmap()/unmmap()。  
+malloc()使用sbrk()和brk()系统调用或者mmap()/unmmap()系统调用。申请内存小于128KB（可设置）时使用sbrk()/brk()，大于等于128KB时使用mmap()。  
+sbrk()和brk()既可以申请内存也可以释放内存。  
+用户层也可以直接调用sbrk()、brk()和mmap()。  
+内核层使用vmalloc()、kmalloc()、get_free_pages()。  
   
-cache管理的优劣通过两个指标衡量：一是Cache命中率；二是有效Cache的比率，有效Cache是指真正会被访问到的Cache项。  
+**mmap & mm_struct & vm_area_struct**  
+- malloc()或mmap()操作都是在用户虚拟地址空间中分配内存块，但这些内存在物理上往往都是离散的。  
+- 这些进程地址空间在内核中使用struct vm_area_struct数据结构来描述，简称VMA，也被称为进程地址空间或进程线性区。  
+- task_struct中的一个条目指向mm_struct，它描述了虚拟存储器中的当前状态。其中pgd指向第一级页表(页全局目录)的基址，而mmap指向一个vm_area_struct(区域结构)的链表，其中每个vm_area_struct都描述了当前虚拟地址空间的一个区域(area)。当内核运行这个进程时，它就将pgd存放在CR3控制寄存器中。  
+![](https://chenghua-root.github.io/images/memory-mmap.png)  
   
-### Cache的位置和作用  
-内存、文件系统、磁盘的层次模型：  
-pp  
-* 在 Linux 中，具体的文件系统，如 ext2/ext3/ext4 等，负责在文件 Cache和存储设备之间交换数据  
-* 位于具体文件系统之上的虚拟文件系统VFS负责在应用程序和文件 Cache 之间通过 read/write 等接口交换数据  
-* 内存管理系统负责文件 Cache 的分配和回收  
-* 虚拟内存管理系统(VMM)则允许应用程序和文件 Cache 之间通过 memory map的方式交换数据  
+问题：  
+1. 段错误是如何产生的：访问不存在于所有vm_area_struct中的虚拟地址?  
+2. protection exception产生：如修改代码段(只读段)所在的vm_area_struct?  
   
-可以看出Cache是在VFS下面，读取文件的过程为read()->VFS->Cache()->磁盘:  
-pp  
+**malloc & brk**  
+- malloc()函数是C函数库封装的一个核心函数，对应的系统调用是brk()。  
+- brk也是基于VMA，找到合适的虚拟地址空间，创建新的VMA并插入VMA红黑树和链表中。  
   
-如何定位读取文件的offset在哪个cache page中：  
-- 通过基数树来实现。即为cache与物理文件的映射。  
-pp  
-  - 上图为快速定位8位(bit)长度的文件长度。  
+示例：  
+1. 分配A=30KB，分配B=40KB  
+![](https://chenghua-root.github.io/images/memory-malloc-01.png)  
+2. 分配C=200KB，分配D=100KB，释放C=200KB  
+![](https://chenghua-root.github.io/images/memory-malloc-02.png)  
+3. 释放B=40KB，释放D=100KB，内存紧缩（空闲内存超过128KB）  
+![](https://chenghua-root.github.io/images/memory-malloc-03.png)  
+  
+**Slab & kmalloc**  
+- slab和kmalloc为内核的内存分配。  
+- 伙伴系统以page为单位进行操作。但很多场景并不需要如此大的内存分配，slab就是用在这种场景。  
+- slab分配器最终还是由伙伴系统来分配出实际的物理页面，只不过slab分配器在这些连续的物理页面上实现了自己的算法，以此来对小内存块进行管理。  
+- kmalloc函数基于slab机制，分配的内存大小也是对齐到2^order个字节。  
+  
+**vmalloc**  
+- vmalloc用于分配虚拟地址连续的内核内存空间，物理上不要求连续。  
+- 同时vmalloc分配的虚拟地址范围在VMALLOC_START/VMALLOC_END之间。  
   
 ## 内存大页  
 在 Linux 操作系统上运行内存需求量较大的应用程序时，由于其采用的默认页面大小为 4KB，因而将会产生较多 TLB Miss 和缺页中断，从而大大影响应用程序的性能。当操作系统以 2MB 甚至更大作为分页的单位时，将会大大减少 TLB Miss 和缺页中断的数量，显著提高应用程序的性能。  
@@ -257,17 +275,14 @@ pp
   
 大页在进程空间和物理地址上都是连续的。  
   
-查看大页使用情况，如下图。由于我们线上机器都没有开启大页，大页使用量为0:  
-pp  
-  
 接下来我们查看一下普通页面和大页映射方式的差别。普通四级页表映射和三级页表内存大页的映射：  
-pp  
+![](https://chenghua-root.github.io/images/memory-huge-page-mapping-64bit.png)  
 -  从上图可以看到，内存大页由于页内地址为2M，2^21。在第三级页目录就需要进行映射了，及线性地址映射到物理地址时，第三级pmd就相当于普通映射的第四级page table.  
   
 ### 透明内存大页（transparent huge page: THP）：  
 由于使用大页需要做额外的操作，包括配置和写代码方面。所以后面又提供了透明大页的功能，即底层默认开启大页，且开发者不需要要关心。  
 RHEL6中默认开启。  
-- 什么时候会分配透明内存大页：  
+什么时候会分配透明内存大页：  
 - 内核会在任何可能的时候分配内存大页。  
 - Linux process will receive 2MB pages if the mmap region is 2MB naturally aligned.？  
 - 内核地址空间使用透明内存大页进行映射。  
@@ -302,53 +317,26 @@ THP目前只能在anonymous memory使用。
   - khugepaged运行间隔时间（10000）  
 6. /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs  
   
-## 虚拟内存分配-用户空间  
-应用程序分配内存使用malloc()/free()或者mmap()/unmmap()。  
-malloc()使用sbrk()和brk()系统调用或者mmap()/unmmap()系统调用。申请内存小于128KB（可设置）时使用sbrk()/brk()，大于等于128KB时使用mmap()。  
-sbrk()和brk()既可以申请内存也可以释放内存。  
-用户层也可以直接调用sbrk()、brk()和mmap()。  
-内核层使用vmalloc()、kmalloc()、get_free_pages()。  
+## Cache管理机制  
+在Linux操作系统中，当应用程序需要读取文件中的数据时，操作系统先分配一些内存，将数据从存储设备读入到内存中，然后再将数据分发给应用程序；当需要往文件中写数据时，操作系统先分配内存接收用户数据，然后再讲数据从内存写到磁盘。文件cache管理指的就是对这些由操作系统分配，并用来存储文件数据的内存的管理。  
   
-**mmap():**  
-- task_struct中的一个条目指向mm_struct，它描述了虚拟存储器中的当前状态。其中pgd指向第一级页表(页全局目录)的基址，而mmap指向一个vm_area_struct(区域结构)的链表，其中每个vm_area_struct都描述了当前虚拟地址空间的一个区域(area)。当内核运行这个进程时，它就将pgd存放在CR3控制寄存器中。  
-pp  
+Cache管理的优劣通过两个指标衡量：一是Cache命中率；二是有效Cache的比率，有效Cache是指真正会被访问到的Cache项。  
   
-问题：  
-1. 段错误是如何产生的：访问不存在于所有vm_area_struct中的虚拟地址?  
-2. protection exception产生：如修改代码段(只读段)所在的vm_area_struct?  
+### Cache的位置和作用  
+内存、文件系统、磁盘的层次模型：  
+![](https://chenghua-root.github.io/images/memory-page-cache.png)  
+* 在 Linux 中，具体的文件系统，如 ext2/ext3/ext4 等，负责在文件 Cache和存储设备之间交换数据  
+* 位于具体文件系统之上的虚拟文件系统VFS负责在应用程序和文件 Cache 之间通过 read/write 等接口交换数据  
+* 内存管理系统负责文件 Cache 的分配和回收  
+* 虚拟内存管理系统(VMM)则允许应用程序和文件 Cache 之间通过 memory map的方式交换数据  
   
-## 物理内存管理  
-内存管理框架:  
-pp  
+可以看出Cache是在VFS下面，读取文件的过程为read()->VFS->Cache()->磁盘:  
+![](https://chenghua-root.github.io/images/memory-vfs-page-cache.png)  
   
-**Slab & kmalloc**  
-- slab和kmalloc为内核的内存分配。  
-- 伙伴系统以page为单位进行操作。但很多场景并不需要如此大的内存分配，slab就是用在这种场景。  
-- slab分配器最终还是由伙伴系统来分配出实际的物理页面，只不过slab分配器在这些连续的物理页面上实现了自己的算法，以此来对小内存块进行管理。  
-- kmalloc函数基于slab机制，分配的内存大小也是对齐到2^order个字节。  
-  
-**vmalloc**  
-- vmalloc用于分配虚拟地址连续的内核内存空间，物理上不要求连续。  
-- 同时vmalloc分配的虚拟地址范围在VMALLOC_START/VMALLOC_END之间。  
-  
-**mm_struct & vm_area_struct**  
-- malloc()或mmap()操作都是在用户虚拟地址空间中分配内存块，但这些内存在物理上往往都是离散的。  
-- 这些进程地址空间在内核中使用struct vm_area_struct数据结构来描述，简称VMA，也被称为进程地址空间或进程线性区。  
-- task_struct->mm_struct->vm_area_struct  
-  
-**malloc & brk**  
-- malloc()函数是C函数库封装的一个核心函数，对应的系统调用是brk()。  
-- brk也是基于VMA，找到合适的虚拟地址空间，创建新的VMA并插入VMA红黑树和链表中。  
-  
-示例：  
-1. 分配A=30KB，分配B=40KB  
-2. 分配C=200KB，分配D=100KB，释放C=200KB  
-3. 释放B=40KB，释放D=100KB，内存紧缩（空闲内存超过128KB）  
-pp  
-  
-**mmap**  
-- 内存映射：void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset); 分为匿名映射和文件映射。  
-- 匿名映射：即只映射物理内存。文件映射：基于打开的文件进行映射。  
+如何定位读取文件的offset在哪个cache page中：  
+- 通过基数树来实现。即为cache与物理文件的映射。  
+![](https://chenghua-root.github.io/images/memory-page-cache-trie.png)  
+  - 上图为快速定位8位(bit)长度的文件长度。  
   
 ## swap分区、内存回收、kswapd  
 swap，指的是一个交换分区或文件。从功能上讲，交换分区主要是在内存不够用的时候，讲部分内存上的数据交换到swap空间上，以便让系统不会因为内存不够用而导致OOM或者其他情况。  
@@ -392,16 +380,24 @@ swap分区的实际使用是跟内存回收行为紧密结合的。内存回收�
   如果内存低于min时，申请内存时就会触发直接回收。  
   watermark的值：  
   - min：cat /proc/sys/vm/min_free_kbytes，单位为1KB  
-     67584  
+   67584  
   - low、high: cat /proc/zoneinfo，单位为page(4KB)  
   
  Node 0, zone |  Normal  
   -----  | ----  
   pages free  |   40342  
-    min     |   16477  
-    low     |   20596  
-    high    |   24715  
+  min   |   16477  
+  low   |   20596  
+  high  |   24715  
 {: .tablelines}  
   
 问题：  
 - 直接内存回收，是回收的哪些内存?  
+  
+## 问题：  
+1. 哪些情况下需要分配连续的物理内存  
+- 内核空间kmalloc分配内存需要物理上连续，通过偏移映射。VMALLOC_START/VMALLOC_END之间，在物理上不需要连续，不能通过偏移映射。  
+- 内存大页/透明内存大页需要物理连续的内存分配  
+2. 为什么进程是资源分配单位，线程是调度单位  
+- 一个进程下的所有线程共享同一个地址空间  
+- 在内核空间中为每个用户线程分配了一个内核栈，栈底部有个thread_info描述整个线程  
