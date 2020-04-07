@@ -25,7 +25,7 @@ perf采样如下：
 后面图片均为网图。  
 文末附有透明内存大页的测试。
   
-## 概述：  
+## 概述  
 进程管理、虚拟内存和文件系统是单机系统最重要的几个底层原理。本文主要讲解虚拟内存机制。  
   
 虚拟内存由底层硬件和操作系统两者软硬件结合来实现，是物理内存、内存地址、地址翻译、磁盘文件、系统内核和进程空间的交互。主要提供3个能力：  
@@ -145,7 +145,7 @@ zone的迁移/整理类型是指对这个zone下面的页面的操作限制：
 ![](https://chenghua-root.github.io/images/memory-mapping-32bit.png)  
   
 64位系统线性地址到物理地址的转换：  
-![](https://chenghua-root.github.io/images/memory-mapping-64bit.png)  
+![](https://chenghua-root.github.io/images/memory-mapping-64bit-v2.png)  
   
 CR3寄存器的值是从哪里设置的？  
 - 内核在创建进程时，会分配页面目录，页面目录的地址就保存在task_struct结构中，task_struct结构中有个mm_struct结构类型的指针mm，mm_struct结构中有个字段pgd就是用来保存该进程的CR3寄存器的值。  
@@ -235,6 +235,7 @@ sbrk()和brk()既可以申请内存也可以释放内存。
 - malloc()或mmap()操作都是在用户虚拟地址空间中分配内存块，但这些内存在物理上往往都是离散的。  
 - 这些进程地址空间在内核中使用struct vm_area_struct数据结构来描述，简称VMA，也被称为进程地址空间或进程线性区。  
 - task_struct中的一个条目指向mm_struct，它描述了虚拟存储器中的当前状态。其中pgd指向第一级页表(页全局目录)的基址，而mmap指向一个vm_area_struct(区域结构)的链表，其中每个vm_area_struct都描述了当前虚拟地址空间的一个区域(area)。当内核运行这个进程时，它就将pgd存放在CR3控制寄存器中。  
+- 线程栈也由mmap()分配。主线程调用pthread_create创建线程时由mmap()分配创建线程栈空间，这些线程栈在mmap的区域内。
 ![](https://chenghua-root.github.io/images/memory-mmap.png)  
   
 问题：  
