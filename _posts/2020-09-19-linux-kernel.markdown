@@ -11,7 +11,9 @@ date:  2020-09-19 16:48:00 +0530
 </style>  
   
 ## 背景  
-工作初期一直使用协程(Go)或多线程同步IO或事件驱动IO(C)的编程模式。现在开始使用单线程Polling+用户态异步IO的编程模式。采用单线程+用户态主要是为了高性能，即线程切换（多线程）+内核栈调用性能开销大。为了探寻多线程+内核栈编程的具体开销情况，学习进程管理、中断机制、时钟模型、同步原理等知识点并记录在此篇文章中。  
+工作初期一直使用协程(Go)或多线程同步IO或事件驱动IO(C)的编程模式。
+现在开始使用单线程Polling+用户态异步IO的编程模式。采用单线程+用户态主要是为了高性能，即线程切换（多线程）+内核栈调用性能开销大。
+为了探寻多线程+内核栈编程的具体开销情况，学习进程管理、中断机制、时钟模型、同步原理等知识点并记录在此篇文章中。  
 本文为作者的学习笔记，不是综述性文章，仅做参考。  
   
 ## 概述  
@@ -100,7 +102,8 @@ task_struct在32位机器中大约有1.7KB。进程描述符中的数据能完�
 - 内核栈: 每个线程都有一个内核栈stack  
 - thread_info: 保存了特定体系结构的汇编代码段需要访问的那部分进程的数据  
 - 内核栈和thread_info统一存储在一个联合体中union thread_unio  
-// task_struct图  
+
+![task_info](https://chenghua-root.github.io/images/linux-kernel-thread-info.png)  
   
 -- thread_info和内核栈虽然共用了thread_union结构, 但是thread_info大小固定, 存储在联合体的开始部分, 而内核栈由高地址向低地址扩展, 当内核栈的栈顶到达thread_info的存储空间时, 则会发生栈溢出  
 -- 系统的current指针指向了当前运行进程的thread_union(或者thread_info)的地址  
@@ -109,13 +112,15 @@ task_struct在32位机器中大约有1.7KB。进程描述符中的数据能完�
 -- 参考：https://blog.csdn.net/gatieme/article/details/51577479  
   
 **进程状态：**  
-- TASK_RUNNING：可执行状态；或者正在执行，或者在运行队列中等待执行  
-- TASK_INTERRUPTIBLE：被阻塞（睡眠态）-可中断，等待某些条件的达成。也会因为接收到信号而提前被唤醒  
-- TASK_UNINTERRUPTIBLE：被阻塞（睡眠态）-不可中断，等待某些条件的达成。接收到信号也不会被唤醒  
+- TASK_RUNNING：可执行状态；或者正在执行，或者在运行队列中等待执行（存放在红黑树中）
+- TASK_INTERRUPTIBLE：被阻塞（睡眠态）-可中断，等待某些条件的达成，也会因为接收到信号而提前被唤醒(存放在等待队列)
+- TASK_UNINTERRUPTIBLE：被阻塞（睡眠态）-不可中断，等待某些条件的达成，接收到信号也不会被唤醒(存放在等待队列)
 - TASK_TRACED：被其他进程跟踪的进程  
 - TASK_STOPPED：进程停止执行  
-// 进程状态图  
-// 进程队列图  
+  
+![进程状态图](https://chenghua-root.github.io/images/linux-kernel-task-state.png)  
+  
+![进程队列图](https://chenghua-root.github.io/images/linux-kernel-ready-and-wait-queue.png)  
   
 **内核线程：**  
 - 内核线程和普通线程的区别在于内核线程没有独立的地址空间（mm指针被设置为NULL）  
@@ -171,7 +176,8 @@ I/O消耗型和处理器消耗型的进程
 - 实时优先级。0~99，越高的实时优先级数值意味着进程优先级越高。  
 -- 任何实时进程的优先级都高于普通进程  
 -- ps -eo state,uid,pid,ppid,rtprio,time,comm  
-// 截图  
+  
+![进程队列图](https://chenghua-root.github.io/images/linux-kernel-priority.png)  
   
 **时间片**  
 - 时间片太长会导致系统对交互的响应表现欠佳  
@@ -268,16 +274,8 @@ SCHED_RR是带有时间片的SCHED_FIFO。
   
 优先级的实质是不同优先级线程对应不同的权重，在一个调度周期内分配的运行时间不一样。  
 如下列出了普通优先级对应的权重:  
-static const int prio_to_weight[40] = {  
- /* -20 */  88761,  71755,  56483,  46273,  36291,  
- /* -15 */  29154,  23254,  18705,  14949,  11916,  
- /* -10 */   9548,   7620,   6100,   4904,   3906,  
- /*  -5 */   3121,   2501,   1991,   1586,   1277,  
- /*  0 */   1024,    820,    655,    526,    423,  
- /*  5 */    335,    272,    215,    172,    137,  
- /*  10 */    110,   87,   70,   56,   45,  
- /*  15 */   36,   29,   23,   18,   15,  
-};  
+  
+![task_info](https://chenghua-root.github.io/images/linux-kernel-nice.png)  
   
 ### vruntime  
 **vruntime计算**  
