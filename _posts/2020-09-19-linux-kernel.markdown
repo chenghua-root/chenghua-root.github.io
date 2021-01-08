@@ -12,8 +12,11 @@ date:  2020-09-19 16:48:00 +0530
   
 ## 背景  
 工作初期一直使用同步编程模式。包括协程(Go)，多线程并发，同步IO，事件驱动IO，条件等待唤醒等。对外部的响应都依赖内核的中断响应和处理。  
+  
 现在开始使用单线程Polling+用户态异步IO的编程模式。采用单线程+用户态主要是为了高性能，即减少线程切换，内核栈调用，内核中断处理等开销。  
+  
 为了探寻多线程+内核栈编程的具体开销情况，学习进程管理、中断机制、时钟模型、同步原理等知识点并记录在此篇文章中。  
+  
 **本文为作者的学习笔记，不是综述性文章，仅做参考。**  
   
 ## 概述  
@@ -102,7 +105,7 @@ task_struct在32位机器中大约有1.7KB。进程描述符中的数据能完�
 - 内核栈: 每个线程都有一个内核栈stack  
 - thread_info: 保存了特定体系结构的汇编代码段需要访问的那部分进程的数据  
 - 内核栈和thread_info统一存储在一个联合体中union thread_unio  
-
+  
 ![task_info](https://chenghua-root.github.io/images/linux-kernel-thread-info.png)  
   
  - thread_info和内核栈虽然共用了thread_union结构, 但是thread_info大小固定, 存储在联合体的开始部分, 而内核栈由高地址向低地址扩展, 当内核栈的栈顶到达thread_info的存储空间时, 则会发生栈溢出  
@@ -112,9 +115,10 @@ task_struct在32位机器中大约有1.7KB。进程描述符中的数据能完�
  - 参考：https://blog.csdn.net/gatieme/article/details/51577479  
   
 **进程状态：**  
-- TASK_RUNNING：可执行状态；或者正在执行，或者在运行队列中等待执行（存放在红黑树中）
-- TASK_INTERRUPTIBLE：被阻塞（睡眠态）-可中断，等待某些条件的达成，也会因为接收到信号而提前被唤醒(存放在等待队列)
-- TASK_UNINTERRUPTIBLE：被阻塞（睡眠态）-不可中断，等待某些条件的达成，接收到信号也不会被唤醒(存放在等待队列)
+- TASK_RUNNING：可执行状态（存放在红黑树中）；或者正在执行，或者在运行队列中等待执行  
+- TASK_INTERRUPTIBLE：被阻塞（睡眠态）(存放在等待队列);  -等待某些条件的达成，也会因为接收到信号(软中断，硬中断)而提前被唤醒  
+-- 被信号唤醒属于伪唤醒，执行完中断后继续睡眠  
+- TASK_UNINTERRUPTIBLE：被阻塞（睡眠态）(存放在等待队列); -等待某些条件的达成，接收到信号也不会被唤醒，只能有内核亲自唤醒（wake_up()）  
 - TASK_TRACED：被其他进程跟踪的进程  
 - TASK_STOPPED：进程停止执行  
   
@@ -267,9 +271,9 @@ SCHED_RR是带有时间片的SCHED_FIFO。
 - Linux 采用两个单独的优先级范围，一个用于实时任务，另一个用于普通任务。  
 - 实时任务分配的静态优先级为 0〜99，而普通任务分配的优先级为100〜139(对应nice值-20 ~ 19)。  
 |--------------------------------------|----------------|  
-0                                    99 100           139  
-<------------------------------------------------------>  
-高优先级                                             低优先级  
+0                                    99 100            139  
+<------------------------------------------------------->  
+高优先级                                           低优先级  
 - 实时任务和普通任务的调度分开管理。实时任务总是优先调度。  
   
 优先级的实质是不同优先级线程对应不同的权重，**在一个调度周期内分配的运行时间不一样。**  
@@ -327,9 +331,112 @@ CFS是这样做的：
 **vruntime会溢出吗**  
 - vruntime使用uint64_t保持，递增，不会overflow  
   1 year = 365 x 24 x 60 x 60 x 1000 x 1000 x 1000 nanosec  
-    ~= 3 x 10^16  
-    ~= 2^55  
+  ~= 3 x 10^16  
+  ~= 2^55  
   2^64 / 2^55 = 2^9 ~= 500 year.  
+  
+**Linux下的调度器是可以有多个同时工作的吗，比如rt 和cfs一起同时工作？**  
+调度器的本质工作是为CPU选择一个运行进程，调度时会“遍历”调度器（依次运行）直到选择到合适的可运行进程。因此，多个调度器同时存在，但非同时运行。具体分析如下。  
+先梳理概念  
+调度策略：即调度算法，一共6种，每个进程属于其中一种（task_struct->policy）  
+- SCHED_RR和SCHED_FIFO和SCHED_DEADLINE：实时进程对应的不同调度策略  
+- SCHED_NORMAL和SCHED_BATCH：普通的非实时进程对应的调度策略  
+- SCHED_IDLE：系统空闲时调用idle进程对应的调度策略  
+  
+调度器类：每个进程属于其中一种（task_struct->sched_class）  
+- stop_sched_class -> dl_sched_class -> rt_sched_class -> fair_sched_class -> idle_sched_class（优先级由高到底）  
+- rt_sched_class->fair_sched_class->idle_sched_class(linux-2.6.34.7)  
+- stop_sched_class->rt_sched_class->fair_sched_class->idle_sched_class(linux-3.10)  
+  
+调度器和调度策略存在映射关系：  
+  
+  | 调度器	| 调度策略 |  
+  | -----            | -----                    |  
+  | stop_sched_class |  无 |  
+  | dl_sched_class   | SCHED_DEADLINE |  
+  | rt_sched_class   | SCHED_FIFO、SCHED_RR |  
+  | fair_sched_class | SCHED_NORMAL、SCHED_BATCH |  
+  | idle_sched_class | SCHED_IDLE|  
+{: .tablelines}  
+  
+再分析调度  
+  
+每个CPU都有一个struct rq对象，包含两个运行队列：  
+  
+- struct rt_rq：实时进程运行队列  
+- struct cfs_rq：普通进程运行队列  
+其中rt_sched_class使用rt_rq，fair_sched_class使用cfs_rq。其它调度器不需要队列。  
+  
+调度执行时机（什么时候执行调度）：  
+- 一种是通过周期性的机制, 以固定的频率运行, 不时的检测是否有必要  
+- 一种是直接的, 比如进程打算睡眠或出于其他原因放弃CPU  
+调度执行：  
+```  
+static void __sched __schedule(void)  
+{  
+  ...  
+  cpu = smp_processor_id();  
+  rq = cpu_rq(cpu);  
+  prev = rq->curr;  
+  ...  
+  put_prev_task(rq, prev);  
+  next = pick_next_task(rq);  
+  ...  
+  if (likely(prev != next)) {  
+    ...  
+    rq->curr = next;  
+    ...  
+    context_switch(rq, prev, next);  
+    ...  
+  }  
+  ...  
+}  
+```  
+- 获取CPU  
+- 获取CPU队列（后面调度器运行时会选择自己对应的运行队列，rt_rq或cfs_rq）  
+- 获取当前进程  
+- 把当前进程放入队列  
+- 从队列选取新的运行进程  
+- 如果新进程与当前进程不为同一进程，则执行上下文切换  
+  
+放回队列：  
+```  
+static void put_prev_task(struct rq *rq, struct task_struct *prev)  
+{  
+  ...  
+  prev->sched_class->put_prev_task(rq, prev);  
+}  
+```  
+- 使用对应的调度器把当前进程放入队列  
+  
+挑选下一个运行进程：  
+```  
+/*  
+ * #define sched_class_highest (&rt_sched_class)   // linux-2.6.34.7   
+ * #define sched_class_highest (&stop_sched_class) // linux-3.10  
+ *   
+ * idle_sched_class->next = null;  
+ */  
+#define for_each_class(class) \  
+   for (class = sched_class_highest; class; class = class->next)  
+  
+static inline struct task_struct *pick_next_task(struct rq *rq)  
+{  
+  const struct sched_class *class;  
+  struct task_struct *p;  
+  ...  
+  for_each_class(class) {  
+    p = class->pick_next_task(rq);  
+    if (p)  
+      return p;  
+  }  
+}  
+```  
+-依次遍历调度器stop_sched_class->rt_sched_class->fair_sched_class->idle_sched_class(linux-3.10)，直到选择合适的运行进程  
+- 可以看出：  
+ - 只要存在实时进程，总是优于普通进程被调度运行  
+ - 多个调度器同时存在，依次运行，直到选出下一个可运行进程  
+  
   
 ## 系统调用  
 **系统调用号**  
@@ -398,6 +505,12 @@ CFS是这样做的：
 中断处理程序无须可重入  
 当一个给定的中断处理程序正在执行时，相应中断线在所有处理器上都会被屏蔽掉。  
   
+### 中断处理程序不能睡眠  
+睡眠和调度等价。中断运行在中断上下文中，没有调度实体，无法被调度。即不能睡眠的关键是因为上下文。  
+操作系统以进程调度为单位，进程的运行在进程的上下文中，以进程描述符作为管理的数据结构。进程可以睡眠的原因是操作系统可以切换不同进程的上下文，进行调度操作，这些操作都以进程描述符为支持。  
+中断运行在中断上下文，没有一个所谓的中断描述符来描述它，它不是操作系统调度的单位。一旦在中断上下文中睡眠，首先无法切换上下文（因为没有中断描述符，当前上下文的状态得不到保存），其次，没有人来唤醒它，因为它不是操作系统的调度单位。  
+此外，中断的发生是非常非常频繁的，在一个中断睡眠期间，其它中断发生并睡眠了，那很容易就造成中断栈溢出导致系统崩溃。  
+  
 ## 同步  
 内核并发执行的原因:  
 - 中断  
@@ -436,7 +549,7 @@ CFS是这样做的：
 互斥锁的实现原理。2.6版本  
 struct mutex {  
   atomic_t  count;  // 引用计数器，初始值为1：锁可以使用；小于等于0：该锁已被获取，需要等待。  
-  spinlock_t wait_lock;    // 自旋锁类型，保证多cpu下，对等待队列访问是安全的。  
+  spinlock_t wait_lock;  // 自旋锁类型，保证多cpu下，对等待队列访问是安全的。  
   struct list_head wait_list;  // 等待队列，如果该锁被获取，任务将挂在此队列上，等待调度。  
 };  
   
