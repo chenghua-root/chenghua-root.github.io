@@ -63,8 +63,8 @@ Linux内核把虚拟地址空间划分为两部分：用户地址空间和内核
 - 内核空间1G：0xC000,0000 - 0xFFFF,FFFF  
   
 64位系统：  
-- 用户空间128T：0x0000,0000,0000,0000 - 0x0000,7FFFF,FFFF,FFFF(高16位与第48位都为0)  
-- 内核空间128T：0xFFFF,8000,0000,0000 - 0xFFFF,FFFFF,FFFF,FFFF(高16位与第48位都为1)  
+- 用户空间128T：0x0000,0000,0000,0000 - 0x0000,7FFF,FFFF,FFFF(高16位与第48位都为0)  
+- 内核空间128T：0xFFFF,8000,0000,0000 - 0xFFFF,FFFF,FFFF,FFFF(高16位与第48位都为1)  
   
 32位与64位系统具体地址分布如下：  
 ![32位与64位系统地址分布](https://chenghua-root.github.io/images/memory-virtual-space02.png)  
