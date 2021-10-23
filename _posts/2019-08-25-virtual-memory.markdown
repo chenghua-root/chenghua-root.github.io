@@ -243,8 +243,8 @@ sbrk()和brk()既可以申请内存也可以释放内存。
 2. protection exception产生：如修改代码段(只读段)所在的vm_area_struct?  
   
 **malloc & brk**  
-- malloc()函数是C函数库封装的一个核心函数，对应的系统调用是brk()。  
-- brk也是基于VMA，找到合适的虚拟地址空间，创建新的VMA并插入VMA红黑树和链表中。  
+- 用户调用malloc库函数或mmap系统调用申请内存。
+- malloc依赖brk系统调用或mmap系统调用，当申请内存小于等于M_MMAP_THRESHOLD(128KB)时使用brk，大于M_MMAP_THRESHOLD时使用mmap.
   
 示例：  
 1. 分配A=30KB，分配B=40KB  
@@ -256,13 +256,16 @@ sbrk()和brk()既可以申请内存也可以释放内存。
   
 **Slab & kmalloc**  
 - slab和kmalloc为内核的内存分配。  
-- 伙伴系统以page为单位进行操作。但很多场景并不需要如此大的内存分配，slab就是用在这种场景。  
+- 伙伴系统以page为单位进行操作。但内核在很多场景并不需要如此大的内存分配，slab就是用在这种场景。  
 - slab分配器最终还是由伙伴系统来分配出实际的物理页面，只不过slab分配器在这些连续的物理页面上实现了自己的算法，以此来对小内存块进行管理。  
 - kmalloc函数基于slab机制，分配的内存大小也是对齐到2^order个字节。  
   
 **vmalloc**  
 - vmalloc用于分配虚拟地址连续的内核内存空间，物理上不要求连续。  
 - 同时vmalloc分配的虚拟地址范围在VMALLOC_START/VMALLOC_END之间。  
+  
+**总结**  
+![](https://chenghua-root.github.io/images/memory-page-alloc.png)  
   
 ## 内存大页  
 在 Linux 操作系统上运行内存需求量较大的应用程序时，由于其采用的默认页面大小为 4KB，因而将会产生较多 TLB Miss 和缺页中断，从而大大影响应用程序的性能。当操作系统以 2MB 甚至更大作为分页的单位时，将会大大减少 TLB Miss 和缺页中断的数量，显著提高应用程序的性能。  
@@ -461,3 +464,7 @@ exit:
   return ret;
 }
 ```  
+
+## 参考  
+  linux系统总览: https://www.jianshu.com/p/82b4454697ce  
+  内存分配的原理--molloc/brk/mmap: http://abcdxyzk.github.io/blog/2015/08/05/kernel-mm-malloc/
