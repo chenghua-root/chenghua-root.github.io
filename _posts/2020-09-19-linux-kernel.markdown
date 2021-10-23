@@ -1,6 +1,6 @@
 ---  
 layout: post  
-title:  "linux kernel"  
+title:  "linux内核管理与进程调度"  
 date:  2020-09-19 16:48:00 +0530  
 ---  
   

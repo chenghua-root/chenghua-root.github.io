@@ -1,6 +1,6 @@
 ---  
 layout: post  
-title:  "Linux虚拟内存机制"  
+title:  "Linux内存管理"  
 date:   2019-09-08 16:48:00 +0530   
 ---  
   
