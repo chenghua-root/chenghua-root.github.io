@@ -22,4 +22,6 @@ date:   2099-12-31 00:00:00 +0530
   
 ## 论文阅读
   
-### [A Critique of ANSI SQL Isolation Levels](https://chenghua-root.github.io/posts/isolation-level)  
+### [A Critique of ANSI SQL Isolation Levels](https://chenghua-root.github.io/posts/a-critique-of-ansi-sql-isolation-levels)  
+  
+### [Time, Clocks, and the Ordering of Events in a Distributed System](https://chenghua-root.github.io/posts/time-clocks-and-the-ordering-of-events-in-a-distributed-system)  

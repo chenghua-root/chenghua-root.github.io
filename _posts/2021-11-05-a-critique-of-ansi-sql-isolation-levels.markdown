@@ -11,8 +11,8 @@ date:   2021-11-05 00:00:00 +0530
 </style>  
   
 论文链接: [A Critique of ANSI SQL Isolation Levels](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/tr-95-51.pdf)  
-推荐指数: 五颗星
-易读性：三颗星
+推荐指数: 五颗星  
+易读性：三颗星  
   
 ## 概述
 基于ANSI SQL-92对隔离级别讨论  
@@ -102,4 +102,4 @@ P3: r1[P]...w2[y in P]...(c1 or a1)  (Phantom)
   
 ### SI vs Repeatable Read
 ![](https://chenghua-root.github.io/images/isolation_level_types.jpg)
-SI相比RR有write skew，但幻读的可能性比RR底。  
+SI相比RR有write skew，但幻读的“可能性”比RR底。  
