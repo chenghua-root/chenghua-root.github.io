@@ -16,26 +16,53 @@ date:   2021-11-05 00:00:00 +0530
   
 ## 概述  
 如何定义分布式系统中事件的顺序，Lamport介绍了如下内容：  
-- 分布式系统中事件发生的先后概念：happen before  
-- 基于happen before的逻辑时钟（偏序|局部)  
+- 分布式系统中事件发生的先后概念：Happen Before  
+- 基于Happen Before的逻辑时钟（偏序|局部)  
 - 逻辑时钟在给定条件后的全局化(全局有序)，并给出了一个基于全局有序的解决资源争夺问题的方法  
 - 物理时钟及其他问题  
+
+## 概述补充-2022.03.06  
+世界上所有的事件都有一定的顺序，给事件排序是本论文"Ordering of Events"讨论的重点问题  
+一种直观的方法是根据事件发生的物理时钟对其排序，但现实世界中物理时钟有偏差，如A时钟的时间落后于"绝对时间"，B时钟的时间提前于"绝对时间"。无法根据两个事件在不同的进程上获取的物理时钟定义他们的先后顺序，特别是当时间精度要求达到微秒甚至纳秒级别  
   
-## 偏序，Happen Before  
-a -> b: 不依赖物理时钟，a发生在b之前，即a happen before b.  
-满足如下三个条件之一，即为happen before关系:  
+是否存在一种排序方法不依赖物理时钟？这里引入Happen Before关系  
+一个分布式系统包含多个进程  
+- 同一进程内部发生的事件存在Happen Before关系  
+- 同一个消息的发送事件和接收事件存在Happen Before关系  
+  
+不在同一个进程发生且之间没有消息传递的事件，则没有Happen Before关系  
+因此Happen Before是一种偏序关系，即只能对部分事件排序  
+偏序关系是唯一的  
+  
+某些场景依赖事件的全部顺序（如线性一致性），应该怎么办？  
+即如何对具有偏序关系之外的事件（不同进程间且没有消息传递）定义顺序，可以引入机制来排序  
+- 使用全局统一的逻辑时钟，ID, LSN等，如TiDB  
+- 使用分布式的高精度的物理时钟。这里又回归到物理时钟  
+使用物理时钟：
+- 由于消息传递最快的速度为光速，当物理时钟精度足够高，即物理时钟误差小于最短的两个进程直接传递消息的时间开销，则可以根据物理时钟定义全局关系，且此全局全系满足偏序关系  
+因此，任意两进程之间需要间隔一定的物理距离，以保证消息传递时间大于时间误差。  
+- Spanner的物理时钟没有如上的限制，而是通过TrueTime + Commit Wait机制来保证一致性(待研究)  
+  
+## 偏序  
+配备了部分排序关系的集合。即不保证集合内的所有对象是相互可比较的。  
+  
+## Happen Before  
+a -> b: 不依赖物理时钟，a发生在b之前，即a Happen Before b.  
+满足如下三个条件之一，即为Happen Before关系:  
 (1) If a and b are events in the same process, and a comes before b, then a -> b.  
 (2) If a is the sending of a message by one process and b is the receipt of the same message by another process, then a -> b.  
 (3) If a -> b and b -> c then a -> c. Two distinct events a and b are said to be **concurrent** if a -/-> b and b -/-> a.  
+并不是所有事件之间都具有[Happen Before]关系，因此被称为偏序关系。  
 此偏序为具有反自反，禁对称，传递性的[严格偏序(反自反偏序)](https://zh.wikipedia.org/wiki/%E5%81%8F%E5%BA%8F%E5%85%B3%E7%B3%BB)  
   
 ## 逻辑时钟  
-此逻辑时钟可理解为序列号，如ID, LSN.  
+Happen Before不依赖物理时间，即Lamport定义事件之间的Happen Before关系时特意避开了物理时间。这也意味着，对事件的[发生时间]进行度量，只能根据逻辑时间。  
+逻辑时钟相当于一个函数，对于每一个发生的事件，它都能给出一个对应的数值（即给这个事件打上一个时间戳）。  
 定义Ci(a)为事件a在process i上发生的时钟(clock).  
 **Clock Condition**定义如下, 对任意的事件a, b:  
-- if a -> b then C(a) < C(b). 即如果a happen before b, 则a发生的时钟小于b发生的时钟. 反之则不成立.  
+- if a -> b then C(a) < C(b). 即如果a Happen Before b, 则a发生的时钟小于b发生的时钟. **反之则不成立.**  
   
-根据happen before的定义，如果下面两个条件满足，则Clock Condition成立。  
+根据Happen Before的定义，如果下面两个条件满足，则Clock Condition成立。  
 C1. If a and b are events in process Pi, and a comes before b, then Ci(a) < Ci(b).  
 C2. If a is the sending of a message by process Pi and b is the receipt of that message by process Pj, then Ci(a) < Cj(b).  
   
@@ -111,19 +138,22 @@ Result:
   
 ## Anomalous Behavior  
 逻辑时钟与现实情况的矛盾。如：  
-- 我们在computer A上执行requestA  
-- 然后通过电话通知computer B在其上执行requestB.  
-- 实际上requestB也可能获得一个比requestA更小的时间戳（代表逻辑时钟）导致requestB happen before requestA  
-但此逻辑时钟给出的全局序与实际情况不符。其原因是若电话通知是一个外部行为，则系统无法感知实际上的requestA先于requestB。  
+- 我们在computer A上执行requestA，向一个分布式系统发起请求  
+- 然后通过电话通知computer B在其上执行requestB，向同一个分布式系统发起请求  
+- 实际上requestB也可能获得一个比requestA更小的时间戳（代表逻辑时钟）  
+但此逻辑时钟给出的全局序与实际情况不符。其原因是电话通知是分布式系统之外的一个行为，则系统无法感知实际上的requestA先于requestB。  
 为避免这样的矛盾，有两种解法:  
-1. 将外部的happen before关系(此处的requestA实际上先于requestB)引入系统内  
+1. 将外部的Happen Before关系(此处的requestA实际上先于requestB)引入系统内  
 2. 引入实际物理时钟  
   
 ## Physical Clocks  
-上面的Anomalous Behavior还可以通过物理时钟来解决，如requestA和requestB获取的时间戳贴近真实物理时间，保证requestA happen before requestB.  
-机器的物理时钟与正确物理时钟存在偏差，只有机器的物理时钟满足一定精度要求才能保证，在不同的两台机器上根据物理时钟获取的时间戳保证requestA happen before requestB.  
+Anomalous Behavior通过物理时钟来解决，如requestA和requestB获取的时间戳贴近真实物理时间，保证requestA 前序于 requestB.  
+机器的物理时钟与正确物理时钟存在偏差，只有机器的物理时钟满足一定精度要求才能保证，在不同的两台机器上根据物理时钟获取的时间戳保证requestA 前序 requestB.  
 - PC1. 机器上的物理时钟与正确物理时钟之间的误差很小. 存在k << 1, 对任意的i: |dCi(t) / dt - 1 | < k. 原子时钟能保证k <= 10^-6  
 - PC2. 对所有的i, j: |Ci(t) - Cj(t) | < e  
 使得e(两台机器之间的物理时钟误差) / (1 - k) <= u(两台机器之间的最短传输时间)，则能够使用机器的物理时钟作为时间戳来定义顺序。  
   
-[Leslie Lamport本人对此论文的讨论。](https://www.microsoft.com/en-us/research/publication/time-clocks-ordering-events-distributed-system/)  
+## 参考  
+    Leslie Lamport本人对此论文的讨论: https://www.microsoft.com/en-us/research/publication/time-clocks-ordering-events-distributed-system  
+    分布式系统基础－Lamport-Clock: https://alstonwilliams.github.io/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E6%A6%82%E5%BF%B5%E4%B8%8E%E7%AE%97%E6%B3%95/2019/02/17/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E5%9F%BA%E7%A1%80-Lamport-Clock/  
+    读书笔记——Time, Clocks, and the Ordering of Events in a Distributed System: http://www.edwardzcn98yx.com/post/b6a38e07.html  

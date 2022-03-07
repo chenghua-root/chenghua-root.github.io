@@ -419,7 +419,7 @@ swap分区的实际使用是跟内存回收行为紧密结合的。内存回收�
 3. 开启内存大页，测试申请16MB  
   测试之前透明内存大页使用量：108544 KB
 ![](https://chenghua-root.github.io/images/memory-thp-test-used-before.png)  
-  测试之前透明内存大页使用量：122880 KB，较测试前增加(122880 - 108544) / 1024 = 14MB  
+  测试之后透明内存大页使用量：122880 KB，较测试前增加(122880 - 108544) / 1024 = 14MB  
 ![](https://chenghua-root.github.io/images/memory-thp-test-used-after.png)  
   缺页次数624：  
 ![](https://chenghua-root.github.io/images/memory-thp-test-open.png)  
