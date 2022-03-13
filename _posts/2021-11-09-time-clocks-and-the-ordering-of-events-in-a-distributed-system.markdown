@@ -155,6 +155,6 @@ Anomalous Behavior通过物理时钟来解决，如requestA和requestB获取的�
 使得e(两台机器之间的物理时钟误差) / (1 - k) <= u(两台机器之间的最短传输时间)，则能够使用机器的物理时钟作为时间戳来定义顺序。  
   
 ## 参考  
-    Leslie Lamport本人对此论文的讨论: https://www.microsoft.com/en-us/research/publication/time-clocks-ordering-events-distributed-system  
-    分布式系统基础－Lamport-Clock: https://alstonwilliams.github.io/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E6%A6%82%E5%BF%B5%E4%B8%8E%E7%AE%97%E6%B3%95/2019/02/17/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E5%9F%BA%E7%A1%80-Lamport-Clock/  
-    读书笔记——Time, Clocks, and the Ordering of Events in a Distributed System: http://www.edwardzcn98yx.com/post/b6a38e07.html  
+Leslie Lamport本人对此论文的讨论: https://www.microsoft.com/en-us/research/publication/time-clocks-ordering-events-distributed-system  
+分布式系统基础－Lamport-Clock: https://alstonwilliams.github.io/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E6%A6%82%E5%BF%B5%E4%B8%8E%E7%AE%97%E6%B3%95/2019/02/17/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E5%9F%BA%E7%A1%80-Lamport-Clock/  
+读书笔记——Time, Clocks, and the Ordering of Events in a Distributed System: http://www.edwardzcn98yx.com/post/b6a38e07.html  

@@ -106,6 +106,6 @@ SI相比RR有write skew，但幻读的“可能性”比RR底。
 
 
 ## 参考  
-    偏序关系: https://zh.wikipedia.org/wiki/%E5%81%8F%E5%BA%8F%E5%85%B3%E7%B3%BB  
-    Time,Clocks,and the Ordering of Events in a Distributed System 读书笔记及个人见解: https://ld246.com/article/1463068950849  
-    译《Time, Clocks, and the Ordering of Events in a Distributed System》: https://www.cnblogs.com/hzmark/p/Time_Clocks_Ordering.html  
+偏序关系: https://zh.wikipedia.org/wiki/%E5%81%8F%E5%BA%8F%E5%85%B3%E7%B3%BB  
+Time,Clocks,and the Ordering of Events in a Distributed System 读书笔记及个人见解: https://ld246.com/article/1463068950849  
+译《Time, Clocks, and the Ordering of Events in a Distributed System》: https://www.cnblogs.com/hzmark/p/Time_Clocks_Ordering.html  

@@ -1,7 +1,7 @@
 ---  
 layout: post  
 title:  "文章列表"  
-date:   2022-03-08 00:00:00 +0530   
+date:   2022-03-13 00:00:00 +0530   
 ---  
   
 <style>  
@@ -19,6 +19,8 @@ date:   2022-03-08 00:00:00 +0530
 ### [linux内核管理与进程调度](https://chenghua-root.github.io/posts/linux-kernel)  
   
 ### [纠删码存储](https://chenghua-root.github.io/posts/erasue-code)  
+  
+### [Machine Check Exception](https://chenghua-root.github.io/posts/machine-check-exception)  
   
 ## 论文阅读
   
