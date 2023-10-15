@@ -1,7 +1,7 @@
 ---  
 layout: post  
 title:  "文章列表"  
-date:   2022-08-10 00:00:00 +0530   
+date:   2023-10-10 00:00:00 +0530   
 ---  
   
 <style>  
@@ -21,6 +21,8 @@ date:   2022-08-10 00:00:00 +0530
 ### [纠删码存储](https://chenghua-root.github.io/posts/erasue-code)  
   
 ### [Machine Check Exception](https://chenghua-root.github.io/posts/machine-check-exception)  
+  
+### [线性一致性及其验证](https://chenghua-root.github.io/posts/linearizability)  
   
 ## 论文阅读
   
