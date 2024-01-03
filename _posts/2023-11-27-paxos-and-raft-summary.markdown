@@ -213,6 +213,7 @@ Read Lease: 通过leader lease的方式来保证leader还处于有效期，避�
 - Batch  
 - Pipeline: 不用等上一轮的日志返回就可以发送下一轮  
 - Append Log Parallelly: 写本地和写follower并发  
+  - **日志提交的多数派不必须包含leader自己**
 - Asynchronous Apply: 不用等commit就返回客户端。至少follower可以不用等commit  
   
 - SST Snapshot: 通过rocksdb injest接口直接将SST file load 进入rocksdb.  
@@ -246,7 +247,7 @@ Read Lease: 通过leader lease的方式来保证leader还处于有效期，避�
 - 如果日志在本地应用(RSM)之前不需要在本地提交，则leader节点可以不包含已经在本地应用的日志  
 - 问题：  
   - paxos/raft算法中，leader提交日志之前是否要保证已经写入本地  
-  - etcd / braft / tikv实现情况  
+  - 不需要。参考etcd / tikv实现  
   
 ## OceanBase  
 [OceanBase的一致性协议为什么选择 paxos而不是raft?](https://www.zhihu.com/question/52337912)  

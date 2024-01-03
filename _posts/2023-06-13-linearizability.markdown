@@ -4,6 +4,8 @@ title:  "线性一致性及其验证"
 date:   2023-06-13 00:00:00 +0530  
 ---  
   
+作者开发的分布式KV系统(基于raft + rocksdb实现，支持事务)需要满足线性一致性, 作者负责线性一致性检测并做了分享。本文为作者准备分享过程中整理的材料。  
+  
 ## 文章内容  
 - 事务一致性和分布式系统一致性的区别  
 - 顺序一致性和线性一致性  
@@ -17,7 +19,7 @@ date:   2023-06-13 00:00:00 +0530
   
 从上到下，一致性模型级别越来越低，并发性越来越好。  
   
-### 事务一致性模型
+### 事务一致性模型  
 不同数据库对于事务隔离级别的定义和要求有所不同。  
 - RC: 读已提交。OLTP数据库要求的最低隔离级别，如OceanBase和MySQL支持配置为RC  
 - RR: 可重复读。经典数据库采用的隔离级别，如MySQL和Oracle  
@@ -32,6 +34,7 @@ date:   2023-06-13 00:00:00 +0530
 常见的实现线性一致性系统的最成熟的就是共识算法 (Consensus Algorithm)，例如 Paxos、Raft 等。  
   
 本文主要讨论顺序一致性和线性一致性以及线性一致性的验证。  
+因果一致性可以参考[条分缕析分布式：因果一致性和相对论时空](https://mp.weixin.qq.com/s/wkXsRufVsbKqTwjzTgNqYQ)  
   
 ### 事务一致性和分布式系统一致性的对比  
 ![linearizability-versus-serializability](https://chenghua-root.github.io/images/linearizability-versus-serializability.png)  
@@ -75,9 +78,15 @@ date:   2023-06-13 00:00:00 +0530
 因此线性一致性除了满足顺序一致性的条件 I 和条件 II 之外，还要满足一个条件：  
 - **条件III**: 不同进程的操作，如果在时间上不重叠，那么它们的执行先后顺序，在这个重排后的序列中必须保持一致。  
   
-### 如何定义进程之间的先后顺序  
+### 站在用户视角，如何确定事件的执行顺序:  
 - 任何请求都有一个开始时间(invoke)，还有一个结束时间(responce)或者超时(timeout/无返回)  
 - 请求的执行可能在开始时间到结束时间的任意时间点完成；如果超时，则完成时间点可能发生在[invoke, ~)  
+  
+如：同一节点上两个进程作为客户端，每个客户端都把请求先记录到同一个log file，然后发起请求，请求返回后也记录到log file  
+- 同一进程内，如果都是等待上一个请求返回后再发送下一个请求，则他们之间的顺序是确定的，对于超时未返回的请求，其与后续请求的执行顺序都是未确定的  
+- 两个进程之间，如果请求-返回之间没有时间重叠，则这两个请求顺序是确定的  
+  
+这两种确定的顺序关系被称为happened-before，详细的事件顺序定义可参考[Time, Clocks, and the Ordering of Events in a Distributed System](https://lamport.azurewebsites.net/pubs/time-clocks.pdf)  
   
 图例:  
 ![linearizability-linearizable-example](https://chenghua-root.github.io/images/linearizability-linearizable-example.png)  
@@ -196,7 +205,7 @@ NP-hard
 6. Client3: Return Get 1  
 7. Client4: Return Get 0  
 8. Client2: Return Put x=1  
-
+  
 算法输出: 执行序列  
 1. Client1 Put x=0  
 5. Client4 Get x=0  
@@ -272,9 +281,16 @@ Jepsen 是由 Kyle Kingsbury 采用函数式编程语言 Clojure 编写的验证
   
 Porcupine 一个用 Go 实现的线性一致性验证工具。是基于 P-compositionality 算法。  
   
+Porcupine测试基本方法参考:  
+- [Porcupine Testing linearizability](https://github.com/anishathalye/porcupine?tab=readme-ov-file#testing-linearizability)  
+- 对其的注解[Porcupine Testing linearizability注解](https://chenghua-root.github.io/posts/linearizability-porcupine)  
+  
 ## 参考  
 Principles of Eventual Consistency https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/final-printversion-10-5-14.pdf  
 Consistency model https://en.wikipedia.org/wiki/Consistency_model  
+一致性模型与共识算法 https://tanxinyu.work/consistency-and-consensus  
 条分缕析分布式：到底什么是一致性？ https://mp.weixin.qq.com/s/qnvl_msvw0XL7hFezo2F4w  
 多角度理解一致性 https://qiankunli.github.io/2022/04/06/replica_consistency_level.html  
 如何验证线性一致性 https://catkang.github.io/2018/07/30/test-linearizability.html  
+条分缕析分布式：因果一致性和相对论时空 https://mp.weixin.qq.com/s/wkXsRufVsbKqTwjzTgNqYQ  
+Time, Clocks, and the Ordering of Events in a Distributed System https://chenghua-root.github.io/posts/time-clocks-and-the-ordering-of-events-in-a-distributed-system  
