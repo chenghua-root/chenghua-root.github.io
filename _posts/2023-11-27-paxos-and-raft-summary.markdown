@@ -26,6 +26,14 @@ Multi paxos: 如何确定多个值。引入状态机和leader的概念。
 未读。  
 对paxos算法进行描述并进行证明。  
   
+[Fast Paxos](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/tr-2005-112.pdf)  
+未读。  
+对理解一致性本质有帮助。  
+  
+[generalized consensus and paxos](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/tr-2005-33.pdf)  
+未读  
+包罗分布式里所有问题的数学解决方案  
+  
 ## Ongaro  
 [Paxos summary](https://ongardie.net/static/raft/userstudy/paxossummary.pdf)  
 由于Multi-Paxos算法在论文里面描述的不够具体，Raft作者Ongaro对Basic-Paxos和Multi-Paxos做了具体的描述。  
@@ -230,6 +238,8 @@ Read Lease: 通过leader lease的方式来保证leader还处于有效期，避�
   
 [关于Paxos "幽灵复现"问题看法](https://zhuanlan.zhihu.com/p/40175038)  
 - 幽灵日志本质是超时未知的日志  
+ - paxos对于未知的日志处理方式是推进
+ - raft对于未知的日志处理方式是覆盖/舍弃
 - raft如何解决幽灵复现  
   - I: 1, 2, 3  // 表示index  
   - A: 1, 2, 2  // 表示term  
