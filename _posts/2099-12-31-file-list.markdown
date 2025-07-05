@@ -1,7 +1,7 @@
 ---  
 layout: post  
 title:  "文章列表"  
-date:   2024-01-01 00:00:00 +0530   
+date:   2025-07-01 00:00:00 +0530   
 ---  
   
 <style>  
@@ -31,5 +31,7 @@ date:   2024-01-01 00:00:00 +0530
 ### [A Critique of ANSI SQL Isolation Levels](https://chenghua-root.github.io/posts/a-critique-of-ansi-sql-isolation-levels)  
   
 ### [Time, Clocks, and the Ordering of Events in a Distributed System](https://chenghua-root.github.io/posts/time-clocks-and-the-ordering-of-events-in-a-distributed-system)  
+  
+### [Amazon Aurora: Design Considerations for High Throughput Cloud-Native Relational Databases](https://chenghua-root.github.io/posts/aws-aurora)  
   
 ### [Socrates: The New SQL Server in the Cloud](https://chenghua-root.github.io/posts/azure-socrates)  

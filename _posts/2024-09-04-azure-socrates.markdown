@@ -130,13 +130,16 @@ Primary写日志到Langding Zone(LZ), 基于Azure Premium Storage service(XIO)�
 - 被当做circular buffer使用，日志格式与传统的SQL Server格式兼容  
 - 关键属性：支持多个读者可以读取一致性的日志，而不需要与生产者同步。  
   - 分层系统中最小化层之间的同步，可以使系统更具扩展性和弹性  
+
 **XLOG Process**  
 Primary除了写LZ外，还并行写日志到XLOG Process.  
 为了避免写LZ失败，而日志却被消费，导致的不一致，需要做一定的同步。  
+
 **同步:**  
 - 日志写到XLOG Process时，先放入Pending Blocks  
 - 待Primary告知哪些日志持久化LZ成功后(状态变为"hardened")，才移入LogBroker  
 - 在LogBroker中排序和补齐  
+
 **Destaging(离台)**  
 - 为了分发和归档日志，process destaging把日志写入local SSD cache for fast access  
 - 以及写入XStore用于长期保存(long-term archive: LT)，默认保存30天，用于PITR和灾备  // 直接写入XStore, 没有再读一遍  
