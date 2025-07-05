@@ -25,7 +25,7 @@ Microsoft Azure & Microsoft Research 在SIGMOD 2019发表了介绍Azure新一代
 把这两个特性分开，有非常大的潜能:  
 - 与可用性相比，持久性不需要做拷贝(非副本，传统数据库主备实例的拷贝)  
 - 与持久性相比，可用性不需要固定数量的副本(后文中PageServer中的副本)  
-![Table 1: Socrates Goals: Scalability, Availability, Cost](https://chenghua-root.github.io/images/socrates-goals.png)  
+![Table 1: Socrates Goals: Scalability, Availability, Cost](https://chenghua-root.github.io/images/socrates-table1.png)  
 Table1对比了SQL Server和苏格拉底.   
 - 更大的实例：本地磁盘->远端存储  
 - 可用性提升：  
@@ -110,7 +110,7 @@ HADR服务了大量实例，总结了很多经验，基于这些经验设定苏�
 - Log从计算和存储中分离【日志是系统瓶颈】  
 - 尝试把Functions转移到存储层  
 - 复用已有的组件和系统  
-![Figure 2: Socrates Architecture](https://chenghua-root.github.io/images/socrates-architecture.png)  
+![Figure 2: Socrates Architecture](https://chenghua-root.github.io/images/socrates-figure2.png)  
 苏格拉底四层架构  
 - 计算节点: 缓存数据在memory和ssd, RBPEX  
 - XLOG service: low commit latency and good salability. PN 单写. 其它节点(如Secondary, PageServer)异步消费日志，以保持数据最新。  
@@ -122,7 +122,7 @@ HADR服务了大量实例，总结了很多经验，基于这些经验设定苏�
 **计算节点和PageServer are stateless**. 数据存放在XLog和XStore  
   
 ## XLOG Service  
-![Figure 3: XLOG Service](https://chenghua-root.github.io/images/socrates-xlog-service.png)  
+![Figure 3: XLOG Service](https://chenghua-root.github.io/images/socrates-xlog-figure3.png)  
 Primary写日志到Langding Zone(LZ), 基于Azure Premium Storage service(XIO)实现。  
 - XIO: 三副本(跨机房?) 性能，成本，可用性，可靠性的tradeoff  
 **Landing Zone**  
@@ -284,14 +284,14 @@ XLOG tier依赖Azure Premium Storage(使用SSD的高性能存储)
 # 性能测试和结果  
 CDB: Cloud Database Benchmark, 用于测试Azure上的微软数据库  
  Experiment 1: CDB Default Mix, Throughput, Production Cluster  
-![Table 2: CDB Throughput: HADR vs. Socrates (1TB)](https://chenghua-root.github.io/images/socrates-cdb-throughput.png)  
+![Table 2: CDB Throughput: HADR vs. Socrates (1TB)](https://chenghua-root.github.io/images/socrates-table2.png)  
 Experiment 2: Caching Behavior  
-![Table 3: Socrates Cache Hit Rate (CDB)](https://chenghua-root.github.io/images/socrates-cache-hit-cdb.png)  
+![Table 3: Socrates Cache Hit Rate (CDB)](https://chenghua-root.github.io/images/socrates-table3.png)  
 ![](https://chenghua-root.github.io/images/socrates-.png)  
-![Table 4: Socrates Cache Hit Rate (TPC-E)](https://chenghua-root.github.io/images/socrates-cache-hit-tpc-e.png)  
+![Table 4: Socrates Cache Hit Rate (TPC-E)](https://chenghua-root.github.io/images/socrates-table4.png)  
 - 320GB/30TB ~= 1%,  32%的缓存命中率  
 Experiment 3: Update-heavy CDB, Log Throughput  
-![Table 5: CDB Log Throughput: HADR vs. Socrates](https://chenghua-root.github.io/images/socrates-cdb-log-throughput.png)  
+![Table 5: CDB Log Throughput: HADR vs. Socrates](https://chenghua-root.github.io/images/socrates-table5.png)  
 为什么Socrates表现更优:  
 - HADR计算节点除了响应客户端请求，还需要并行的处理日志和数据库的备份  
 - Socrates则可以利用XStore的快照进行备份，从而在Socrates Primary达到更高的日志生产率  

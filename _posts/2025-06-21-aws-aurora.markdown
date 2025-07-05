@@ -82,7 +82,7 @@ Segment:
   
 - 数据页，redo log: 记录修改前后的页面差异。  
   
-![Figure2](https://chenghua-root.github.io/images/aurora-figure2.jpg)  
+![Figure2](https://chenghua-root.github.io/images/aurora-figure2.png)  
   
 传统MySQL架构：  
 - log, binlog, data(page), double-write, FRM files(元数据)  
@@ -101,7 +101,7 @@ Segment:
 - 基于redolog, 后台按需生成数据库页  
 - 避免了不必要的写入：为了防止存储中的页(16KB)撕裂而双写。先写入“双写缓冲区”, 成功后再写入数据文件(.ibd)  
   
-![Figure3](https://chenghua-root.github.io/images/aurora-figure3.jpg)  
+![Figure3](https://chenghua-root.github.io/images/aurora-figure3.png)  
   
 Aurora中的网络IO:  
 - 主实例把日志写入存储服务  
@@ -109,7 +109,7 @@ Aurora中的网络IO:
 - 基于逻辑段(PG)，数据库引擎对日志进行拆分并有序批处理的发送给6个副本，等4个副本确认写成功，则认为日志记录是持久的或已硬化的  
 - 副本使用redolog将其更改应用到他们的缓冲区缓存中  
   
-![Table1](https://chenghua-root.github.io/images/aurora-table1.jpg)  
+![Table1](https://chenghua-root.github.io/images/aurora-table1.png)  
   
 MySQL vs Aurora  
 - 跨多个可用区的同步镜像MySQL配置 vs RDS Aurora跨多个可用区的副本  
@@ -130,7 +130,7 @@ MySQL vs Aurora
 - 尽量减少前台写入请求延迟。  
 - Aurora中，后台处理会影响前台请求的性能，需要做好控制。  
   
-![Figure4](https://chenghua-root.github.io/images/aurora-figure4.jpg)  
+![Figure4](https://chenghua-root.github.io/images/aurora-figure4.png)  
   
 存储节点活动（图4）:  
 1. 接收日志记录并将其添加到内存中；  
@@ -260,7 +260,7 @@ Aurora也使用这一特点（事务执行和恢复使用同一redolog applicato
   
 # 5. PUTTING IT ALL TOGETHER  
   
-![Figure5](https://chenghua-root.github.io/images/aurora-figure5.jpg)  
+![Figure5](https://chenghua-root.github.io/images/aurora-figure5.png)  
   
 鸟瞰图5：  
 - 存储节点使用本地盘  
@@ -310,3 +310,5 @@ MTR-\>CPLs
 min(VCL, max(CPLs))-\>VDL(计算层计算)  
 write/read inst-\>PGMRPL-\>发送给Storage, GC log  
 VDL + LAL(LSN Allocation Limit)-\>运行事务能分配的最大的LSN  
+  
+[1] Amazon Aurora: Design Considerations for High Throughput Cloud-Native Relational Databases  
