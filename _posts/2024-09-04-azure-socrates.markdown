@@ -122,7 +122,7 @@ HADR服务了大量实例，总结了很多经验，基于这些经验设定苏�
 **计算节点和PageServer are stateless**. 数据存放在XLog和XStore  
   
 ## XLOG Service  
-![Figure 3: XLOG Service](https://chenghua-root.github.io/images/socrates-xlog-figure3.png)  
+![Figure 3: XLOG Service](https://chenghua-root.github.io/images/socrates-figure3.png)  
 Primary写日志到Langding Zone(LZ), 基于Azure Premium Storage service(XIO)实现。  
 - XIO: 三副本(跨机房?) 性能，成本，可用性，可靠性的tradeoff  
 **Landing Zone**  
@@ -287,7 +287,6 @@ CDB: Cloud Database Benchmark, 用于测试Azure上的微软数据库
 ![Table 2: CDB Throughput: HADR vs. Socrates (1TB)](https://chenghua-root.github.io/images/socrates-table2.png)  
 Experiment 2: Caching Behavior  
 ![Table 3: Socrates Cache Hit Rate (CDB)](https://chenghua-root.github.io/images/socrates-table3.png)  
-![](https://chenghua-root.github.io/images/socrates-.png)  
 ![Table 4: Socrates Cache Hit Rate (TPC-E)](https://chenghua-root.github.io/images/socrates-table4.png)  
 - 320GB/30TB ~= 1%,  32%的缓存命中率  
 Experiment 3: Update-heavy CDB, Log Throughput  
