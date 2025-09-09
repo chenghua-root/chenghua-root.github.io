@@ -73,15 +73,15 @@ Define firstUnchosenIndex as the smallest log index i > 0 for which acceptedProp
     - 不同的未被chosen的proposal number(非空洞): 存在，不同的leader导致  
       - | &#124; ∞ &#124; 3.4 &#124; 4.2 &#124; |  
     - 不同的未被chosen的proposal number(非空洞), 且大的proposal number在前面: 存在，不同的leader导致，前面的大的proposal number覆盖了前任leader的proposal number  
-      - | ∞ | 4.2 | 3.4 |  
+      - | &#124; ∞ &#124; 4.2 &#124; 3.4 &#124; |  
     - 未被chosen空洞，即最后一个被chosen之前的index有未被chosen: 当leader时留下的，因为不是leader则会"被"chosen最小未被chosen(firstUnchosenIndex)的index  
-      - | ∞ | 3.4 | ∞ |  
+      - | &#124; ∞ &#124; 3.4 &#124; ∞ &#124; |  
     - 未被chosen空洞是否包含不同的proposal number: 不存在，只有leader才会留下空洞，当选leader之前的已经被chosen  
-      - | ∞ | 3.4 | 4.2 | ∞ |  
+      - | &#124; ∞ &#124; 3.4 &#124; 4.2 &#124; ∞ &#124; |  
     - 日志空洞: 存在  
-      - | ∞ |   | 3.4 |      leader或者follower都可能  
-      - | ∞ |   | 3.4 | ∞ |  leader时  
-      - | ∞ |   | ∞ |        leader时  
+      - | &#124; ∞ &#124; &nbsp;&nbsp;&nbsp;&nbsp; &#124; 3.4 &#124; &nbsp;&nbsp;&nbsp;&nbsp; | leader或者follower都可能  
+      - | &#124; ∞ &#124; &nbsp;&nbsp;&nbsp;&nbsp; &#124; 3.4 &#124; ∞ &#124; &nbsp;&nbsp;&nbsp;&nbsp; | leader时  
+      - | &#124; ∞ &#124; &nbsp;&nbsp;&nbsp;&nbsp; &#124; ∞ &#124; &nbsp;&nbsp;&nbsp;&nbsp; | leader时  
   - 总结: **未被chosen的空洞只会是当leader时留下，且只会有一个任期的空洞**  
 - 因此，**multi paxos是支持乱序提交的(被chosen)**, 是否能乱序应用则依赖业务逻辑  
 - 副本状态机(replicated state machine)定义是要求顺序apply  
