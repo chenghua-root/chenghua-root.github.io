@@ -71,7 +71,7 @@ Define firstUnchosenIndex as the smallest log index i > 0 for which acceptedProp
   - 因此整体的视角看，未被chosen的空洞(有比此index更大的index被设置为chosen了)只会存在于一个任期  
   - 但是从单个acceptor看，其日志状态有:  
     - 不同的未被chosen的proposal number(非空洞): 存在，不同的leader导致  
-      - | ∞ | 3.4 | 4.2 |  
+      - | &#124; ∞ &#124; 3.4 &#124; 4.2 &#124; |  
     - 不同的未被chosen的proposal number(非空洞), 且大的proposal number在前面: 存在，不同的leader导致，前面的大的proposal number覆盖了前任leader的proposal number  
       - | ∞ | 4.2 | 3.4 |  
     - 未被chosen空洞，即最后一个被chosen之前的index有未被chosen: 当leader时留下的，因为不是leader则会"被"chosen最小未被chosen(firstUnchosenIndex)的index  

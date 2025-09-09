@@ -169,27 +169,29 @@ getPage(pageId, LSN): **读取>=LSN最小版本的page数据**
 - "According to the GetPage@LSN protocol, the Page Server may return a page from the future. "  
   
 考虑如下的事件顺序  
-1. 在local buffers更新page X  
-2. 写更新日志。由于压力，本地缓存中淘汰了page X  
-3. Primary读取page X  
+1. 在local buffers(计算节点PN)更新page X  
+2. 写更新日志  
+3. 由于压力，本地缓存中淘汰了page X  
+4. ...Primary读取page X  
   
 为了保证读取到page的最新版本，需要满足如下条件:  
 1. 等待page应用到X-LSN  
 2. 返回Page X  
   
-Primary如何读取到page的最新版本。PN并不记录所有page的LSN。PN构建一个hash map(on pageId), 尝试记录被淘汰page的last modifyed LSN。  
+Primary如何读取到page的最新版本。PN并不记录所有page的LSN。PN构建一个hash map(on pageId), 尝试记录被淘汰page的last modifyed LSN-X。  
 记录方式：  
 - 构建一个固定大小的map, 包含固定数目的bucket, 被淘汰的pageId映射到某个bucket  
-- 每个bucket会被映射多个page, 此bucket只记录映射page的最大的LSN  
-- 如果读取的某个page没有被修改过，也可以直接hash获取对应bucket的最大的LSN  
+- 每个bucket会被映射多个page, 此bucket只记录映射page的最大的LSN-Y=max(X0, X1, X2)  
+- 读取的某个page没有被修改过，也可以直接hash获取对应bucket的最大的LSN-Y  
 - bucket个数: slots = BufferPoolSize / PageSize / srv_n_page_hash_locks(16) / 2  
-- 读取page时，使用page对应的bucket记录的LSN (>= page's last modifyed LSN)  
+- 读取page时，使用page对应的bucket记录的LSN-Y (>= page's last modifyed LSN)  
 NDB计算节点也采用了类似的方法来登记。  
   
-*读取时不直接全部使用最大LSN的目的是，某些page还没有shipping成功，PageServer无法保证返回最新的数据，因此需要通过某种方式判断请求的page是否已经完成shipping, 如果没完成则阻塞。*  
+*读取时不直接使用最大LSN(全局最大的last modifyed LSN)的目的是，某些page还没有shipping成功，PageServer无法保证(判断)返回最新的数据，因此需要通过某种方式判断请求的page是否已经完成shipping, 如果没完成则阻塞。*  
 - *NDB阻塞方法: 在LogSDK基于LSN来判断, 请求的LSN大于还未完成shipping的LSN，则阻塞（返回错误）.*  
 - *Socrates: XLOG Service不维护消费状态，计算节点直接从PageServer读取，则阻塞判断放在PageServer*  
 *因此，读取page时LSN使用大于等于其最新的LSN，但尽量小，以避免被阻塞。*  
+*最小可以使用每个page的last modifyed LSN-X, 但需要计算层记录所有page的last modifyed LSN-X. 因此，结合bucket hash机制：在尽量少记录与尽量小LSN做一个平衡*  
 *PageServer需要向前推进自己的shipping LSN, 以尽量避免阻塞read page请求。*  
 *某个PageServer即使一直没有所属page的日志，也会通过心跳来向前推进自己的shipping LSN点。*  
   
