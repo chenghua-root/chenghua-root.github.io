@@ -89,9 +89,9 @@ Define firstUnchosenIndex as the smallest log index i > 0 for which acceptedProp
 [Implementing Replicated Logs with Paxos](https://ongardie.net/static/raft/userstudy/paxos.pdf)  
 PPT分享: 引入Paxos，达成一个值会遭遇哪些场景，如何生成Proposal Number, Basic Paxos举例，Multi Paxos实现。  
   
-[Paxos Exam](https://ongardie.net/static/raft/userstudy/quizzes.html)  
+[Paxos And Raft Exam](https://ongardie.net/static/raft/userstudy/quizzes.html)  
   
-[Paxos Exam Rubric](https://ongardie.net/static/raft/userstudy/rubric.pdf)  
+[Paxos And Raft Exam Answer](https://ongardie.net/static/raft/userstudy/rubric.pdf)  
   
 ## 郁白Paxos三部曲  
 [Paxos三部曲之一 : 使用Basic-Paxos协议的日志同步与恢复](http://oceanbase.org.cn/archives/90)  
