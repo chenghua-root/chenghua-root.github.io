@@ -1,7 +1,7 @@
 ---  
 layout: post  
 title:  "文章列表"  
-date:   2025-07-01 00:00:00 +0530   
+date:   2025-09-29 00:00:00 +0530   
 ---  
   
 <style>  
@@ -35,3 +35,5 @@ date:   2025-07-01 00:00:00 +0530
 ### [Amazon Aurora: Design Considerations for High Throughput Cloud-Native Relational Databases](https://chenghua-root.github.io/posts/aws-aurora)  
   
 ### [Socrates: The New SQL Server in the Cloud](https://chenghua-root.github.io/posts/azure-socrates)  
+  
+### [Scaling and Hardening XLOG: the SQL Azure Hyperscale Log Service](https://chenghua-root.github.io/posts/azure-socrates-xlog)  

@@ -8,15 +8,14 @@ date:   2025-09-26 00:00:00 +0530
   
 本论文为 Socrates: The New SQL Server in the Cloud 的后续论文，理解本论文需要先看Socrates  
   
-早期版本上线后存在一些挑战，**本论文详细举例了如何进行工程实践来解决这些挑战，如：任务状态机复杂度管理，以及对所有客户端的log请求统一管理(XLOG Pool)**  
+Socrates早期版本上线后存在一些挑战，**本论文详细举例了如何进行工程实践来解决这些挑战，如：任务状态机复杂度管理，以及对所有客户端的log请求统一管理(XLOG Pool)**  
   
 *斜体为笔者补充的内容*  
   
 # ABSTRACT  
-XLOG是Azure Hyperscale分布式数据库(对应论文socrates)的集中式日志服务模块。  
-负责把redo log分发给所有客户端，对应的消费者为page servers和secondary compute nodes(只读计算节点).  
+XLOG是Azure Hyperscale分布式数据库(对应论文socrates)的集中式日志服务模块。负责把redo log分发给所有客户端，对应的消费者为page servers和secondary compute nodes(只读计算节点).  
   
-挑战：  
+上线后XLOG服务存在如下挑战：  
 - 规模增长，page server + Secondary数量变多, 客户端数量增加  
 - 需要处理更多的请求 + 对相应的IO子系统也带来了更多挑战  
   
@@ -27,7 +26,7 @@ XLOG是Azure Hyperscale分布式数据库(对应论文socrates)的集中式日�
 - 数据完整性: 出口校验，端到端校验  
   
 生产环境可支持128TB数据库。  
-阐述了一个托管关键任务应用并管理数百 PB 数据的真实世界云数据库服务，如何通过创新其日志服务来提升可扩展性、可靠性和成本效益。  
+本文阐述了一个托管关键任务应用并管理数百 PB 数据的真实世界云数据库服务，如何通过创新其日志服务来提升可扩展性、可靠性和成本效益。  
   
   
 # INTRODUCTION  
@@ -46,7 +45,6 @@ XLOG:
   
 - 持久化日志：日志被发送给Landing Zone(LZ)和XLOG, 当日志在LZ完成持久化，XLOG就把日志移到Broker, XLOG中的内存cache.  
 - 读日志: XLOG响应clients的日志请求顺序，Broker(内存), local cache(LC, 本地磁盘), LZ, long-term storage(LT).  
-  
 - 服务整个database(对应mysql实例?), 支持128TB  
 - 4 CPU, 40GB RAM的XLOG最大支持10TB的database  
 - 每个database一个XLOG  
@@ -126,7 +124,6 @@ In Fig. 3, a and b are pending work items, waiting to run. cand d are deferred w
 工作项:  
 - 实心矩形代表顶级请求。虚线框的工作项代表子项。目前，嵌套层级没有限制，目前为止只需要单一层级的嵌套。  
 - 每个工作项都知晓自身的唤醒条件，这一条件通过虚方法IsReadyToResume() 实现：框架在处理延迟队列时会调用该方法，以此判断对应的工作项是否可以被放回工作队列。  
-  
 - 例如：一个顶级请求会被表示为一个工作项（AsyncLogReadRequest）。如果该请求发现所需的日志存在于 Broker 中，它会创建一个子工作项（ReadBrokerWorkItem）并将其与父工作项关联，以此处理这个子状态机。当 Broker 完成处理后，它会将结果传递给父工作项，通知父工作项继续执行，然后自行销毁。一旦有工作线程可用，处理流程就会恢复执行父工作项。  
   
 这些改进使得 XLOG 能够支持更多的客户端，并且彻底消除了线程饥饿问题。具体而言，通过这些优化，XLOG 在仅使用 4 核 CPU 的情况下，就能轻松处理 100TB 的数据库规模，而无需按照数据库大小成比例地增加线程数量。  
