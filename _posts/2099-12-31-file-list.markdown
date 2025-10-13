@@ -1,7 +1,7 @@
 ---  
 layout: post  
 title:  "文章列表"  
-date:   2025-09-29 00:00:00 +0530   
+date:   2025-10-12 00:00:00 +0530   
 ---  
   
 <style>  
@@ -12,19 +12,21 @@ date:   2025-09-29 00:00:00 +0530
   
 ## 博客
   
+### [纠删码存储](https://chenghua-root.github.io/posts/erasue-code)  
+  
+### [线性一致性及其验证](https://chenghua-root.github.io/posts/linearizability)  
+  
 ### [事务原理及实现机制](https://chenghua-root.github.io/posts/database-transaction)  
   
 ### [linux内存管理](https://chenghua-root.github.io/posts/virtual-memory)  
   
 ### [linux内核管理与进程调度](https://chenghua-root.github.io/posts/linux-kernel)  
   
-### [纠删码存储](https://chenghua-root.github.io/posts/erasue-code)  
-  
 ### [Machine Check Exception](https://chenghua-root.github.io/posts/machine-check-exception)  
   
-### [线性一致性及其验证](https://chenghua-root.github.io/posts/linearizability)  
-  
 ### [Paxos和Raft学习总结](https://chenghua-root.github.io/posts/paxos-and-raft-summary)  
+  
+### [SSD学习](https://chenghua-root.github.io/posts/ssd-knowledge)  
   
 ## 论文阅读
   
