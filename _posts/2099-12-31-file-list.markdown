@@ -28,6 +28,8 @@ date:   2025-10-12 00:00:00 +0530
   
 ### [SSD学习](https://chenghua-root.github.io/posts/ssd-knowledge)  
   
+### [网络知识学习](https://chenghua-root.github.io/posts/network)  
+  
 ## 论文阅读
   
 ### [A Critique of ANSI SQL Isolation Levels](https://chenghua-root.github.io/posts/a-critique-of-ansi-sql-isolation-levels)  
