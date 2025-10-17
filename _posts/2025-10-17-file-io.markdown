@@ -1,20 +1,27 @@
 ---  
-layout: pos  
+layout: post  
 title:  "文件IO学习笔记"  
 date:   2025-10-16 00:00:00 +0530  
 ---  
   
+# 文章内容  
+- 先基于经典图片Linux-storage-stack-diagram介绍了page cache(buffer), direct io, sync, mmap等概念，以及完整的IO流程  
+- 然后介绍了异步IO, 包含AIO和io_uring  
   
 # The Linux Storage Stack Diagram 概览  
   
-上层：用户空间，是 I/O 的发起方。  
+![](https://chenghua-root.github.io/images/file-io-Linux-storage-stack-diagram_v4.10.png)  
   
-中间：内核空间，是处理 I/O 的核心，包括 VFS、文件系统、page cache, 块设备层等。  
+上层：用户空间，I/O 的发起方。  
+  
+中间：内核空间，处理 I/O 的核心，包括 VFS、文件系统、page cache, 块设备层等。  
   
 下层：块设备（如 SSD/HDD），是 I/O 的最终目的地。  
   
+接下来介绍部分模块的作用。  
+  
 ## 1. Page Cache（页面缓存）  
-图中，Page Cache 位于 VFS 和具体文件系统（如 ext4）右边，可以理解为在VFS+文件系统的下面，在 Block Layer 之上。它是整个文件 I/O 的 性能加速中心。  
+图中，Page Cache 位于 VFS 和具体文件系统（如 ext4）右边，可以理解为在VFS和文件系统的下面，在 Block Layer 之上。它是整个文件 I/O 的 性能加速中心。  
   
 作用：它是内存（RAM）的一部分，用于缓存磁盘上的文件数据。对文件的读写操作首先会作用在 Page Cache 上。  
   
@@ -38,7 +45,7 @@ date:   2025-10-16 00:00:00 +0530
   
 ## 2. Buffer 的概念  
   
-这是一个历史概念，在现代 Linux 中容易混淆。  
+除了page cache，我们还会提到buffer的概念。这是一个历史概念，在现代 Linux 中容易混淆。  
   
 在 Linux 早期，有两个独立的缓存：Page Cache（用于文件数据）和 Buffer Cache（用于磁盘块）。  
   
@@ -53,6 +60,8 @@ Direct I/O 在图中是一条 绕过 Page Cache 的路径。
   
 如何实现：应用程序在打开文件时使用 O_DIRECT 标志。  
   
+![](https://chenghua-root.github.io/images/file-io-direct-io.png)  
+  
 在图中的路径：  
   
 1. 用户空间的 write(data)。  
@@ -64,11 +73,11 @@ Direct I/O 在图中是一条 绕过 Page Cache 的路径。
 7. 最终到达存储设备。  
   
 优缺点：  
-- 优点：避免了在 Page Cache 中进行两次拷贝（用户态<->内核态），适用于自知缓存策略的应用（如数据库）。保证写入不因缓存而延迟。  
+- 优点：避免了在 Page Cache 中进行拷贝（用户态<->内核态），适用于自知缓存策略的应用（如数据库）。保证写入不因缓存而延迟。  
 - 缺点：每次读写都直接访问磁盘，速度慢，且失去了缓存带来的预读等性能优势。  
   
 ## 4. Sync（同步）  
-Sync 操作关乎 数据持久化 的时机，它在图中作用于 Page Cache 和 Block Layer。  
+Sync 操作关乎 数据持久化 的时机，它在图中作用于 **Page Cache 和 Block Layer**。  
   
 什么是 Sync：强制将 Page Cache 中的“脏”页写入磁盘，并等待物理写入完成。  
   
@@ -97,7 +106,6 @@ O_DIRECT 和 fsync 解决的是不同层次的问题：
   
 应用程序 -> O_DIRECT -> 文件系统 -> 块层 -> 设备驱动 -> 设备缓存 --**这需要fsync**--> 物理介质  
   
-  
 ## 5. Mmap（内存映射）  
 Mmap 在图中是一条从 用户空间 直接连接到 Page Cache 的 捷径。  
   
@@ -124,8 +132,8 @@ Mmap 在图中是一条从 用户空间 直接连接到 Page Cache 的 捷径。
   - 内存映射和解除映射有开销。  
   - 对于小文件或顺序读写，优势不明显。  
   
-## 总结：在图中看完整 I/O 流程  
-以一个普通的 write() 调用为例，走一遍这张图：  
+## 总结：完整 I/O 流程  
+以一个普通的 write() 调用为例，走一遍图(Linux-storage-stack-diagram)：  
   
 1. User Space：应用程序调用 write(fd, buf, size)。  
 2. System Call Interface：调用 write() 系统调用，陷入内核。  
@@ -146,9 +154,9 @@ Mmap 在图中是一条从 用户空间 直接连接到 Page Cache 的 捷径。
 10. DMA：驱动程序设置 DMA，让磁盘控制器直接从 Page Cache 的内存中取数据。  
 11. Block Device：数据被物理地写入 SSD/HDD。  
   
-当使用 O_DIRECT 时，路径在步骤 4（文件系统）后，直接跳到步骤 8（块层），跳过了步骤 5 和 7。  
-当使用 mmap 时，路径是从用户空间直接“触摸”到步骤 5（Page Cache），无需系统调用和拷贝。  
-当调用 fsync 时，它会确保步骤 7 和 8-11 同步完成，然后才返回。  
+**当使用 O_DIRECT 时，路径在步骤 4（文件系统）后，直接跳到步骤 8（块层），跳过了步骤 5 和 7。**  
+**当使用 mmap 时，路径是从用户空间直接“触摸”到步骤 5（Page Cache），无需系统调用和拷贝。**  
+**当调用 fsync 时，它会确保步骤 7 和 8-11 同步完成，然后才返回。**  
   
 # 异步IO  
   
@@ -161,11 +169,11 @@ Mmap 在图中是一条从 用户空间 直接连接到 Page Cache 的 捷径。
   
 真正的 异步 I/O 目标是：**应用程序发起一个 I/O 请求后立即返回，不会被阻塞，当 I/O 操作在底层完成时，应用程序能以某种方式被通知到。**  
   
-## Linux AIO 的 I/O 流程  
+## Linux AIO  
   
 Linux AIO 的设计目标是在 Block Layer 及以下实现真正的异步。它的路径在图中是一条 “绕道而行”的路径。  
   
-写入流程  
+**写入流程**  
 应用程序发起一个异步写请求。  
   
 1. User Space:  
@@ -178,7 +186,7 @@ io_submit 系统调用陷入内核。
 3. VFS & Filesystem:  
 请求穿过 VFS 和文件系统层。文件系统将文件的逻辑偏移转换为磁盘的块地址。  
   
-4. 关键决策点：绕过 Page Cache:  
+4. **关键决策点：绕过 Page Cache:**  
 由于 Linux AIO 对 Buffer I/O 的支持很差，为了确保真正的异步，应用通常会使用 O_DIRECT。  
 因此，数据不会进入 Page Cache。  
 写入请求和用户缓冲区的数据描述被直接传递给异步 I/O 引擎。  
@@ -202,11 +210,20 @@ User Space --(io_submit 系统调用)--> VFS --> Filesystem --(O_DIRECT 路径)-
   
 核心特点：这是一条 “瘦路径”，它刻意避开了 Page Cache，以实现确定性。但这也导致了其功能受限和性能损失（失去缓存优势）。  
   
-## io_uring的I/O流程  
+AIO的局限:  
+- O_DIRECT枷锁: io_submit 发现读取的数据不在 Page Cache 中时，会触发缺页中断去同步地读取数据，退化为阻塞操作. 为了确保异步，Linux AIO 在大多数情况下必须使用 O_DIRECT。因为它如果使用 Buffer I/O  
+- 统调用并未减少：虽然 io_submit 可以批量提交，但它仍然是一个系统调用。高并发下，大量的 io_submit 和 io_getevents 调用本身就成了瓶颈。  
+- 功能残缺：它只支持基本的磁盘 I/O，不支持网络 I/O，也不支持像 fsync, open, stat 这样的非存储类系统调用。  
+- 内存管理复杂：由于强制 O_DIRECT，应用程序需要自行管理内存对齐等问题。  
+  
+总结 Linux AIO：它是一个设计上受限的、不完整的异步 I/O 方案，虽然解决了“等待I/O完成”的阻塞问题，但引入了新的复杂性和性能瓶颈。  
+  
+## io_uring  
   
 io_uring 的革新在于它重新定义了用户态与内核态的通信方式。它在图中的路径覆盖了所有传统路径，但效率极高。  
   
-写入流程:最高效的轮询模式。  
+**写入流程:**  
+最高效的轮询模式。  
   
 1. User Space:  
 - 应用程序在用户内存中准备一个 提交队列条目，填写操作类型（如 IORING_OP_WRITE）、fd、缓冲区地址等。  
@@ -214,7 +231,7 @@ io_uring 的革新在于它重新定义了用户态与内核态的通信方式�
   
 2. 零系统调用提交:  
 - 内核有一个轮询线程，持续检查 SQ 的尾指针。  
-- 当它发现新的请求时，主动地将其从 SQ 中取出。至此，请求已提交给内核，而应用程序未曾发出系统调用。  
+- 当它发现新的请求时，主动地将其从 SQ 中取出。至此，**请求已提交给内核，而应用程序未曾发出系统调用。**  
   
 3. VFS & Filesystem:  
 - 内核线程带着请求进入 VFS 和文件系统层。文件系统执行路径查找、权限检查、逻辑块映射等。  
@@ -248,3 +265,16 @@ io_uring 的路径是多路并行的，它复用了整个 Linux Storage Stack：
   
 核心特点：这是一条 “胖而快”的路径。它不回避栈的任何部分，而是通过消除系统调用和共享内存这两个最昂贵的开销，让整个栈都能以最高的效率运行。  
   
+**io_uring 的优势是全方位突出的**：  
+  
+- **零系统调用**：在轮询模式下，无论是提交请求还是收割完成，都完全不需要系统调用。这是性能的终极杀手锏。  
+- 全面支持：它不仅仅支持存储 I/O，还支持：  
+  - Buffer I/O：可以异步地使用 Page Cache，无需 O_DIRECT。  
+  - 所有系统调用：通过 IORING_OP_* 操作码，可以异步执行 read, write, fsync, accept, connect, stat，甚至 epoll_ctl。它是一个通用的异步化框架。  
+- 真正的灵活性与高性能：  
+  - 批处理：一次系统调用可以提交大批量请求。  
+  - 轮询驱动：内核可以轮询 SQ 和硬件中断，进一步降低延迟。  
+  - 链接请求：可以提交一系列有依赖关系的请求（如：先读A，读完再写B）。  
+  
+# 参考  
+Linux_Storage_Stack_Diagram https://www.thomas-krenn.com/en/wiki/Linux_Storage_Stack_Diagram  

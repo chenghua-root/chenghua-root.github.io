@@ -51,3 +51,9 @@ sed操作:
 行尾删除空格: sed -i 's/[ \t]*$//' filename  
 行尾添加空格: sed -i 's/$/&  /' filename  
 ```  
+  
+for mac:  
+```  
+行尾删除空格: sed -i '' 's/[ \t]*$//' filename  
+行尾添加空格: sed -i '' 's/$/&  /' filename  
+```  

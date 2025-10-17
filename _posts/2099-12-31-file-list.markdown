@@ -1,7 +1,7 @@
 ---  
 layout: post  
 title:  "文章列表"  
-date:   2025-10-12 00:00:00 +0530   
+date:   2025-10-17 00:00:00 +0530   
 ---  
   
 <style>  
@@ -29,6 +29,8 @@ date:   2025-10-12 00:00:00 +0530
 ### [SSD学习](https://chenghua-root.github.io/posts/ssd-knowledge)  
   
 ### [网络知识学习](https://chenghua-root.github.io/posts/network)  
+  
+### [文件IO学习](https://chenghua-root.github.io/posts/file-io)  
   
 ## 论文阅读
   
