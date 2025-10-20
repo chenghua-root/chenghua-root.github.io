@@ -7,6 +7,7 @@ date:   2025-10-16 00:00:00 +0530
 # 文章内容  
 - 先基于经典图片Linux-storage-stack-diagram介绍了page cache(buffer), direct io, sync, mmap等概念，以及完整的IO流程  
 - 然后介绍了异步IO, 包含AIO和io_uring  
+- 最后介绍了io监测: iostat和blktrace
   
 # The Linux Storage Stack Diagram 概览  
   
@@ -275,6 +276,58 @@ io_uring 的路径是多路并行的，它复用了整个 Linux Storage Stack：
   - 批处理：一次系统调用可以提交大批量请求。  
   - 轮询驱动：内核可以轮询 SQ 和硬件中断，进一步降低延迟。  
   - 链接请求：可以提交一系列有依赖关系的请求（如：先读A，读完再写B）。  
+
+# io监测
+
+## iostat
+
+查看所以磁盘的整体压力
+使用: iostat -dx 1 5
+重点关注 %util, await, avgqu-sz。如果 %util 持续高于80%，await 远高于正常水平（例如>20ms），说明存在瓶颈。
+
+![](https://chenghua-root.github.io/images/file-io-iostat.png)  
+
+![](https://chenghua-root.github.io/images/file-io-iostat01.png)  
+
+![](https://chenghua-root.github.io/images/file-io-iostat02.png)  
+
+iostat的await包含wait time + service time，对于评估一个磁盘或者云盘而言，service time才是衡量磁盘性能的核心指标和直接指标。iostat无法提供这个指标，但是blktrace可以。
+
+## blktrace
+
+一个I/O请求进入block layer之后，可能会经历下面的过程：
+- Remap: 可能被DM(Device Mapper)或MD(Multiple Device, Software RAID) remap到其它设备
+- Split: 可能会因为I/O请求与扇区边界未对齐、或者size太大而被分拆(split)成多个物理I/O
+- Merge: 可能会因为与其它I/O请求的物理位置相邻而合并(merge)成一个I/O
+- 被IO Scheduler依照调度策略发送给driver
+- 被driver提交给硬件，经过HBA、电缆（光纤、网线等）、交换机（SAN或网络）、最后到达存储设备，设备完成IO请求之后再把结果发回。
+
+blktrace 能够记录下IO所经历的各个步骤.
+
+![](https://chenghua-root.github.io/images/file-io-blktrace-data.png)  
+
+根据每个步骤记录的数据，即可以“计算”出service time.
+
+### blktrace使用
+使用blktrace需要挂载debugfs
+- sudo mount -t debugfs debugfs /sys/kernel/debug
+
+记录数据：
+- sudo blktrace -d /dev/sdb  or /dev/sdb1
+- 缺省的输出文件名是 sdb.blktrace.<cpu>，每个CPU对应一个文件
+
+解析数据
+- 方法1. 利用blkparse命令分析blktrace记录的数据：
+  - blkparse -i sdb | vim -
+- 方法2. 利用btt分析blktrace数据
+  - 把原本按CPU分别保存的文件合并成一个，合并后的文件名为sdb.blktrace.bin
+    - blkparse -i sdb -d sdb.blktrace.bin
+  - 执行btt对sdb.blktrace.bin进行分析
+    - btt -i sdb.blktrace.bin | vim -
+
+更详细的使用参考: blktrace分析IO https://bean-li.github.io/blktrace-to-report/
   
 # 参考  
 Linux_Storage_Stack_Diagram https://www.thomas-krenn.com/en/wiki/Linux_Storage_Stack_Diagram  
+blktrace分析IO https://bean-li.github.io/blktrace-to-report/
+Block I/O Layer Tracing: blktrace https://www.mimuw.edu.pl/~lichota/09-10/Optymalizacja-open-source/Materialy/10%20-%20Dysk/gelato_ICE06apr_blktrace_brunelle_hp.pdf
