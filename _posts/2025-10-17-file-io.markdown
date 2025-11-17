@@ -328,6 +328,6 @@ blktrace 能够记录下IO所经历的各个步骤.
 更详细的使用参考: blktrace分析IO https://bean-li.github.io/blktrace-to-report/
   
 # 参考  
-Linux_Storage_Stack_Diagram https://www.thomas-krenn.com/en/wiki/Linux_Storage_Stack_Diagram  
-blktrace分析IO https://bean-li.github.io/blktrace-to-report/
-Block I/O Layer Tracing: blktrace https://www.mimuw.edu.pl/~lichota/09-10/Optymalizacja-open-source/Materialy/10%20-%20Dysk/gelato_ICE06apr_blktrace_brunelle_hp.pdf
+Linux_Storage_Stack_Diagram  https://www.thomas-krenn.com/en/wiki/Linux_Storage_Stack_Diagram  
+blktrace分析IO  https://bean-li.github.io/blktrace-to-report/  
+Block I/O Layer Tracing: blktrace  https://www.mimuw.edu.pl/~lichota/09-10/Optymalizacja-open-source/Materialy/10%20-%20Dysk/gelato_ICE06apr_blktrace_brunelle_hp.pdf  

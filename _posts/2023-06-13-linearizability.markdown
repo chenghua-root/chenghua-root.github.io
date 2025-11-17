@@ -294,3 +294,7 @@ Consistency model https://en.wikipedia.org/wiki/Consistency_model
 如何验证线性一致性 https://catkang.github.io/2018/07/30/test-linearizability.html  
 条分缕析分布式：因果一致性和相对论时空 https://mp.weixin.qq.com/s/wkXsRufVsbKqTwjzTgNqYQ  
 Time, Clocks, and the Ordering of Events in a Distributed System https://chenghua-root.github.io/posts/time-clocks-and-the-ordering-of-events-in-a-distributed-system  
+  
+## 分享照片  
+  
+![linearizability-consistency-share](https://chenghua-root.github.io/images/linearizability-consistency-sharing.jpg)  

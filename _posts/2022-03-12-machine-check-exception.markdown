@@ -12,6 +12,9 @@ date:   2022-03-12 00:00:00 +0530
   
 ## 背景  
 集群达到一定数量后，一些较小概率发生的硬件错误会出现，如典型的硬件出错：内存错误。  
+一般情况下，内存错误可被自动修复。PolarStore使用DPDK管理的大页内存，这些大页内存被pin住导致无法修复。  
+本文简单介绍了硬件故障以及如何注入故障。然后以内存为例，介绍了内存错误的发现和修复机制，并引出了DPDK管理的大页内存为什么不支持修复。  
+下图为PolarStore在运行过程中记录的内存错误。  
 ![mcelog:内存错误](https://chenghua-root.github.io/images/mce-00-mcelog.png)  
 这些硬件错误在Linux系统中有一套发现和处理机制，被称为Machine Check Exception(MCE)。  
   

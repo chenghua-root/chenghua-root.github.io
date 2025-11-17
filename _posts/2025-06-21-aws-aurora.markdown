@@ -115,7 +115,7 @@ MySQL vs Aurora
 - 跨多个可用区的同步镜像MySQL配置 vs RDS Aurora跨多个可用区的副本  
 - 半个小时事务处理量: 780,000 vs 27,378,000. 35倍  
 - 每个事务的IO数量: MySQL在忽略EBS内部和副本实例的IO情况下(相当于使用本地盘的IO数量)，7.4 vs 0.95(6副本)  
- - Aurora单节点处理的IO相当于MySQL的46分支一(0.95/7.4/6)  
+ - Aurora单节点处理的IO相当于MySQL的46分之一(0.95/7.4/6)  
  - 节省的数据写入量, 可以积极的被复制数据使用，以提高耐用性和可用性。  
   
 崩溃恢复  
@@ -164,7 +164,7 @@ MySQL中的LSN根据日志有序记录的字节增长。如从启动开始，第
 - **VCL**(Volume Complete LSN): 此LSN之前的所有前向日志都已记录。  
  - recovery时，大于VCL的日志都会被truncate.  
  - *一个volume对应一个数据库，已经持久化的LSN, 计算层计算。根据每个PGCL，计算出整个volume的VCL, 小于等于VCL的日志都完成持久化*  
-- **CPLs**(Consistency Point LSNs). 数据库会基于CPLs进一步限制Points来截断日志。  
+- **CPLs**(Consistency Point LSNs. /*CPL含义参考后面的描述*/). 数据库会基于CPLs进一步限制Points来截断日志。  
 - **VDL**(Volume Durable LSN): 小于等于VCL的最大的CPL作为VDL，其后的日志都会被截断。  
  - VCL=1007, CPLs=(900, 1000, 1100), 则VDL=1000，即只保留到1000的日志  
   
@@ -190,14 +190,14 @@ MySQL中的LSN根据日志有序记录的字节增长。如从启动开始，第
   
 限流  
 - 任意时刻：都有大量的并发事务，产生事务各自的redolog.  
-- 数据库对每条log分配有序唯一的LSN，此LSN会被限制在VDL + LAL(LSN Allocation Limit: 10 million).  
+- 数据库对每条log分配有序唯一的LSN，此LSN会被限制在VDL + LAL(LSN Allocation Limit: 10 million, 约为10MB).  
 - 目的：在存储和网络跟不上的时候, 避免计算层相较于存储层走的太远。  
   
 每个PG的segments只包含属于此pages的日志。这些日志串起来(backlinks)来跟踪日志记录的完整度，以计算(establish) **Segment Complete LSN(SCL)**.由存储层计算.  
 SCL标明属于此PG的所有小于等于SCL的日志都已经收到。  
 SCL被存储节点用来发现和交互缺失的日志。  
   
-*计算层通过quorum协议，询问SCL可以计算出Protection Group Complete LSN(PGCL)*. 计算层计算。  
+*计算层通过quorum协议，询问SCL可以计算出Protection Group Complete LSN(PGCL)*. 计算层(sdk/client)计算。  
   
 ### 4.2.2 Commits  
   
@@ -308,7 +308,7 @@ SCL(存储层)-\>PGCL(计算层)
 PGCL(计算层)-\>VCL(计算层)  
 MTR-\>CPLs  
 min(VCL, max(CPLs))-\>VDL(计算层计算)  
-write/read inst-\>PGMRPL-\>发送给Storage, GC log  
+write/read inst-\>PGMRPL-\>发送给Storage, 用于GC log  
 VDL + LAL(LSN Allocation Limit)-\>运行事务能分配的最大的LSN  
   
 [1] Amazon Aurora: Design Considerations for High Throughput Cloud-Native Relational Databases  
