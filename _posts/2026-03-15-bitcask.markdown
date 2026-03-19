@@ -1,0 +1,148 @@
+---  
+layout: post  
+title:  "Bitcask: A Log-Structured Hash Table for Fast Key/Value Data"  
+date:   2026-03-15 00:00:00 +0530  
+---  
+  
+# 背景  
+Bitcask的起源于分布式数据库Riak紧密相连。Riak中的key/value集群使用的是可插拔的本地存储，几乎任何键值对形式的组件都可以被用着单机存储引擎。  
+  
+# 目标  
+目前已经存在许多类似的本地键值存储，包括Berkeley DB, Tokyo Cabinet和Innostore. 我们寻求以下目标：  
+  
+- 极低的读写延迟  
+- 高吞吐量，尤其是随机条目的写入  
+- 处理远超内存容量的数据集的能力，且性能不下降  
+- 崩溃友好性，快速回复和不丢失数据  
+- 易于备份和恢复  
+- 相对简单、易懂(因此也易维护)的代码结构和数据格式  
+- 高负载或大数据量下的行为可预测性  
+- 允许作为Riak默认组件使用的开源协议  
+  
+实现其中某些目标容易，但同时实现所有目标却很难。  
+  
+当时现有的本地存储系统在满足如上所有目标方面都不够理想。与 Eric Brewer（CAP定理提出者）讨论这个问题时，他对**哈希表日志合并（Hash table log merging）**提出了一个核心见解：这样做可能潜在地与 LSM 树（LSM-trees）一样快，甚至更快。  
+  
+这引导我们以全新的视角去探索 20 世纪 80 年代和 90 年代首创的**日志结构文件系统（Log-structured file systems）**中的一些技术。这种探索最终促成了 Bitcask 的开发，它是一个能很好地满足上述所有目标的存储系统。  
+  
+# 模型  
+Bitcask的模型很简单。一个 Bitcask 实例就是一个目录，并且我们强制规定在任何给定时间内，只有一个操作系统进程可以打开该 Bitcask 实例进行写入。你可以将该进程有效地视为“数据库服务器”。  
+  
+在任何时刻，该目录中只有一个文件处于**“活跃（Active）”状态，供服务器写入。当该文件达到设定的大小阈值时，它会被关闭，并创建一个新的活跃文件。一旦文件被关闭（无论是出于预设逻辑还是因为服务器退出），它就被视为不可变（Immutable）**的，永远不会再被打开进行写入操作。  
+  
+![](https://chenghua-root.github.io/images/bitcask-on-disk.png)  
+  
+a bitcask on disk:  
+- older data file  
+- older data file  
+- **active data file**  
+  
+活跃文件只允许追加写，对于写来说不需要磁盘寻址。写入key/value格式如下:  
+  
+![](https://chenghua-root.github.io/images/bitcask-entry-format.png)  
+  
+- crc: compute from tstamp to value  
+- tstamp: 32-bit int local timestamp, internal-only, not exposed  
+- ksz: the size of key  
+- vsz: the size of value  
+  
+# 写入  
+每次写入，都是新的条目追加写入活跃文件。对于删除，则是写入一个特殊的墓碑value，将在后续合并的时候被移除。因此，Bitcask的数据文件都是线性顺序的键值对条目。  
+  
+追加写完成后，需要更新内存中一个叫**keydir**的结构. keydir是一张哈希表，映射了每个key在file中的一些信息，包括file, offset, 此key最新写入的size.  
+  
+当一个写发生，keydir会更新新写入数据的位置信息. 旧数据(覆盖写场景)仍然处于磁盘上，任何新的读取都会使用keydir中的最新版本信息。合并操作最终会移除旧数据。  
+  
+![](https://chenghua-root.github.io/images/bitcask-keydir.png)  
+  
+# 读取  
+读取是一个简单的行为，不会超过一次磁盘寻址。  
+- 查询keydir, 获取file id, position, size  
+- 读取数据  
+  
+![](https://chenghua-root.github.io/images/bitcask-get-key.png)  
+  
+# 合并  
+通过合并来消除过时或者被删除的数据，合并生成的新的immutable文件，会附加一个hint file, 记录了每个key/value对在新文件中的index信息。  
+|-tstamp-|-ksz-|-vsz-|-pos-|-key-|  
+使用hint file能加快系统启动，避免扫描整个数据文件。  
+  
+![](https://chenghua-root.github.io/images/bitcask-merge.png)  
+  
+# 补充说明  
+论文的目标是帮助理解 Bitcask 的通用机制。针对略过的一些领域，补充说明如下：  
+- 读取性能: 依赖操作系统的"文件系统缓存"，目前没有自建内存缓存。  
+- 性能基准: Bitcask的初衷并非成为最快的存储引擎，而是**获得足够的速度，同时保持代码，设计和文件格式的高质量和简洁性.**  
+- 实现细节: 本文档未包含诸如"内部KeyDir锁机制"的描述。  
+- 数据压缩: Bitcask没有对数据进行任何压缩，因为压缩的成本收益高度依赖于应用场景。  
+  
+# 目标回顾  
+- 低延迟的单条读写：Bitcask 速度极快。典型的中位延迟低于 1 毫秒（高分位延迟也非常理想），我们确信它能达到预期的速度目标。  
+- 高吞吐量，尤其是写入随机条目流时：在配备慢速磁盘的笔记本电脑上的早期测试显示，吞吐量可达每秒 5000-6000 次写入。  
+- 处理远超内存容量的数据集且性能不下降：上述测试使用的数据集超过了系统内存的 10 倍，且此时未显示出任何行为改变的迹象。  
+- 崩溃友好性，包括快速恢复和数据不丢失：由于在 Bitcask 中数据文件和提交日志（Commit Log）是同一回事，恢复过程非常简单，无需“重放（Replay）”。Hint Files可以使启动过程极其迅速。  
+- 易于备份和恢复：由于文件在滚动切换后是不可变的. 运维人员可以轻松使用任何首选的系统级机制进行备份。恢复只需将数据文件放置在目标目录中即可。  
+- 相对简单、易懂（且易于维护）的代码结构和数据格式：Bitcask 概念简洁，代码干净，数据文件非常易于理解和管理。我们对支撑在 Bitcask 之上的系统感到非常放心。  
+- 在高负载或大容量下的行为可预测性：在高访问负载下，Bitcask 表现良好。唯一可预测的例外是：KeyDir 结构会随键的数量小幅增长，且必须完全装入内存。这一限制在实践中微不足道，因为即使有数百万个键，当前实现占用的内存也远低于 1GB。  
+  
+# API  
+  
+![](https://chenghua-root.github.io/images/bitcask-api.png)  
+  
+# 合并举例  
+数据追加  
+- keyA: v1  
+- keyA: v2  
+- keyB: v1  
+- keyC: v1  
+冻结为File 0  
+ActiveKeyDir:  
+- keyA: v2 in file0  
+- keyB: v1 in file0  
+- keyC: v1 in file0  
+  
+继续数据追加  
+- keyB: v2(delete)  
+- keyC: v2  
+冻结为File 1  
+ActiveKeyDir:  
+- keyA: v2 in file0  
+- keyC: v2 in file1  
+  
+继续数据追加  
+- keyC: v3(delete)  
+- keyB: v3  
+ActiveKeyDir:  
+- keyA: v2 in file0  
+- keyB: v3 in active file  
+  
+## 合并file  
+**注意**：合并只处理不可变（已关闭）的文件，不包括活跃文件（active file）。  
+  
+合并File 0和File 1为MergeFile0, 生成一个MergeKeyDir  
+MergeFile0:  
+- keyA: v2  
+- keyC: v2  
+  
+MergeKeyDir:  
+- keyA: v2 in MergeFile0  
+- keyC: v2 in MergeFile0  
+  
+## 合并keydir  
+  
+```python
+for key, new_pos in MergeKeyDir.items():  
+    # 锁定 Active KeyDir 的这一条记录（粒度很小）  
+    current_pos = ActiveKeyDir.get(key)  
+    if current_pos and current_pos.file_id in old file ids:  
+        # 当前值在旧文件中，用合并后的新位置更新  
+        ActiveKeyDir.update(key, new_pos)  
+    else:  
+        # 如果 current_pos 不存在（key已被删除）或指向的是 Active File 或更高版本的 Immutable File  
+        # 说明 Merge 期间发生了新的 Put/Delete 操作，新值已经在那了，我们要放弃 Merge 生成的旧值  
+        pass  
+```
+  
+ActiveKeyDir变更为(keyC由于被删除，合并时会被忽略):  
+- keyA: v2 in MergeFile0  
+- keyB: v3 in active file  
